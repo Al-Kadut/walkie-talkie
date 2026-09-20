@@ -1,93 +1,126 @@
-// Initialize socket connection
+// ==========================================
+// SOCKET.IO CONNECTION
+// ==========================================
 
-window.socket = io({
-    path: '/api',
-    autoConnect: false // We will connect manually when joining
-});
+if (typeof io === 'undefined') {
+    console.error('Socket.IO belum berhasil dimuat.');
+} else {
 
-// Event listeners for socket connection status
+    window.socket = io({
+        path: '/api',
+        autoConnect: false
+    });
 
-window.socket.on('connect', () => {
-    updateConnectionStatus('Connected', 'green');
-});
+    // ==========================================
+    // CONNECTION EVENTS
+    // ==========================================
 
-window.socket.on('disconnect', () => {
-    updateConnectionStatus('Disconnected', 'red');
-    window.closeAllPeerConnections();
-});
+    window.socket.on('connect', () => {
+        updateConnectionStatus('Connected', 'green');
+        console.log('Socket connected:', window.socket.id);
+    });
 
-window.socket.on('connect_error', () => {
-    updateConnectionStatus('Connection Error', 'red');
-});
+    window.socket.on('disconnect', () => {
+        updateConnectionStatus('Disconnected', 'red');
 
-// User events
+        if (typeof window.closeAllPeerConnections === 'function') {
+            window.closeAllPeerConnections();
+        }
+    });
 
-window.socket.on('user-joined', (user) => {
-    addUserToList(user);
+    window.socket.on('connect_error', (error) => {
+        updateConnectionStatus('Connection Error', 'red');
+        console.error('Socket connection error:', error);
+    });
 
-    // When a new user joins, caller creates the offer
-    window.createPeerConnection(user.socketId, true);
-});
+    // ==========================================
+    // USER EVENTS
+    // ==========================================
 
-window.socket.on('user-left', (data) => {
-    removeUserFromList(data.socketId);
-    window.closePeerConnection(data.socketId);
-});
+    window.socket.on('user-joined', (user) => {
+        addUserToList(user);
 
-// WebRTC Signaling Events
+        if (typeof window.createPeerConnection === 'function') {
+            window.createPeerConnection(user.socketId, true);
+        }
+    });
 
-window.socket.on('webrtc-offer', (data) => {
-    window.handleWebRTCOffer(data.caller, data.sdp);
-});
+    window.socket.on('user-left', (data) => {
+        removeUserFromList(data.socketId);
 
-window.socket.on('webrtc-answer', (data) => {
-    window.handleWebRTCAnswer(data.callee, data.sdp);
-});
+        if (typeof window.closePeerConnection === 'function') {
+            window.closePeerConnection(data.socketId);
+        }
+    });
 
-window.socket.on('webrtc-ice-candidate', (data) => {
-    window.handleNewICECandidate(data.sender, data.candidate);
-});
+    // ==========================================
+    // WEBRTC SIGNALING
+    // ==========================================
 
-// Speaking Lock Events
+    window.socket.on('webrtc-offer', (data) => {
+        if (typeof window.handleWebRTCOffer === 'function') {
+            window.handleWebRTCOffer(data.caller, data.sdp);
+        }
+    });
 
-window.socket.on('speaking-start', (data) => {
-    if (data.socketId !== window.socket.id) {
-        setSpeaker(data.socketId, data.username);
-    }
-});
+    window.socket.on('webrtc-answer', (data) => {
+        if (typeof window.handleWebRTCAnswer === 'function') {
+            window.handleWebRTCAnswer(data.callee, data.sdp);
+        }
+    });
 
-window.socket.on('speaking-stop', (data) => {
-    clearSpeaker(data.socketId);
-});
+    window.socket.on('webrtc-ice-candidate', (data) => {
+        if (typeof window.handleNewICECandidate === 'function') {
+            window.handleNewICECandidate(data.sender, data.candidate);
+        }
+    });
 
-// Helper functions to be defined in main.js but called here
+    // ==========================================
+    // SPEAKING LOCK
+    // ==========================================
+
+    window.socket.on('speaking-start', (data) => {
+        if (data.socketId !== window.socket.id) {
+            setSpeaker(data.socketId, data.username);
+        }
+    });
+
+    window.socket.on('speaking-stop', (data) => {
+        clearSpeaker(data.socketId);
+    });
+}
+
+
+// ==========================================
+// UI HELPER FUNCTIONS
+// ==========================================
 
 function updateConnectionStatus(text, color) {
-    if (window.updateUIConnectionStatus) {
+    if (typeof window.updateUIConnectionStatus === 'function') {
         window.updateUIConnectionStatus(text, color);
     }
 }
 
 function addUserToList(user) {
-    if (window.uiAddUser) {
+    if (typeof window.uiAddUser === 'function') {
         window.uiAddUser(user);
     }
 }
 
 function removeUserFromList(socketId) {
-    if (window.uiRemoveUser) {
+    if (typeof window.uiRemoveUser === 'function') {
         window.uiRemoveUser(socketId);
     }
 }
 
 function setSpeaker(socketId, username) {
-    if (window.uiSetSpeaker) {
+    if (typeof window.uiSetSpeaker === 'function') {
         window.uiSetSpeaker(socketId, username);
     }
 }
 
 function clearSpeaker(socketId) {
-    if (window.uiClearSpeaker) {
+    if (typeof window.uiClearSpeaker === 'function') {
         window.uiClearSpeaker(socketId);
     }
 }
