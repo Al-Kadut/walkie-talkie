@@ -1,9 +1,12 @@
 // Initialize socket connection
+
 window.socket = io({
+    path: '/api/socket.io',
     autoConnect: false // We will connect manually when joining
 });
 
 // Event listeners for socket connection status
+
 window.socket.on('connect', () => {
     updateConnectionStatus('Connected', 'green');
 });
@@ -18,8 +21,10 @@ window.socket.on('connect_error', () => {
 });
 
 // User events
+
 window.socket.on('user-joined', (user) => {
     addUserToList(user);
+
     // When a new user joins, caller creates the offer
     window.createPeerConnection(user.socketId, true);
 });
@@ -30,6 +35,7 @@ window.socket.on('user-left', (data) => {
 });
 
 // WebRTC Signaling Events
+
 window.socket.on('webrtc-offer', (data) => {
     window.handleWebRTCOffer(data.caller, data.sdp);
 });
@@ -43,6 +49,7 @@ window.socket.on('webrtc-ice-candidate', (data) => {
 });
 
 // Speaking Lock Events
+
 window.socket.on('speaking-start', (data) => {
     if (data.socketId !== window.socket.id) {
         setSpeaker(data.socketId, data.username);
@@ -54,6 +61,7 @@ window.socket.on('speaking-stop', (data) => {
 });
 
 // Helper functions to be defined in main.js but called here
+
 function updateConnectionStatus(text, color) {
     if (window.updateUIConnectionStatus) {
         window.updateUIConnectionStatus(text, color);
