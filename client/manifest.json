@@ -1,0 +1,21 @@
+{
+    "name": "Walkie Talkie Web",
+    "short_name": "Walkie",
+    "description": "Real-Time Voice Communication",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#121212",
+    "theme_color": "#121212",
+    "icons": [
+      {
+        "src": "https://cdn-icons-png.flaticon.com/512/914/914972.png",
+        "sizes": "192x192",
+        "type": "image/png"
+      },
+      {
+        "src": "https://cdn-icons-png.flaticon.com/512/914/914972.png",
+        "sizes": "512x512",
+        "type": "image/png"
+      }
+    ]
+  }
