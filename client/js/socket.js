@@ -1,4 +1,5 @@
 // ==========================================
+// WALKIE TALKIE
 // FIREBASE SOCKET ADAPTER
 // ==========================================
 
@@ -39,72 +40,112 @@ const socketId =
 // STATE
 // ==========================================
 
-let currentChannel = null;
-let currentUsername = null;
+let currentChannel =
+    null;
 
-const eventHandlers = {};
+let currentUsername =
+    null;
 
-const firebaseUnsubscribers = [];
+
+const eventHandlers =
+    {};
 
 
-// ==========================================
-// WEBRTC SIGNAL DUPLICATE PROTECTION
-// ==========================================
+const firebaseUnsubscribers =
+    [];
 
-const processedSignals = new Set();
+
+const knownUserIds =
+    new Set();
 
 
 // ==========================================
 // EVENT SYSTEM
 // ==========================================
 
-function on(event, callback) {
+function on(
+    event,
+    callback
+) {
 
-    if (!eventHandlers[event]) {
-        eventHandlers[event] = [];
+    if (
+        !eventHandlers[event]
+    ) {
+
+        eventHandlers[event] =
+            [];
+
     }
 
-    eventHandlers[event].push(callback);
+
+    eventHandlers[event]
+        .push(callback);
+
 }
 
 
-function once(event, callback) {
+function once(
+    event,
+    callback
+) {
 
-    const wrapper = (...args) => {
+    const wrapper =
+        (...args) => {
 
-        try {
             callback(...args);
-        } finally {
+
 
             const handlers =
-                eventHandlers[event] || [];
+                eventHandlers[event] ||
+                [];
+
 
             const index =
-                handlers.indexOf(wrapper);
+                handlers.indexOf(
+                    wrapper
+                );
 
-            if (index !== -1) {
-                handlers.splice(index, 1);
+
+            if (
+                index !== -1
+            ) {
+
+                handlers.splice(
+                    index,
+                    1
+                );
+
             }
 
-        }
+        };
 
-    };
 
-    on(event, wrapper);
+    on(
+        event,
+        wrapper
+    );
+
 }
 
 
-function trigger(event, data) {
+function trigger(
+    event,
+    data
+) {
 
     const handlers =
-        eventHandlers[event] || [];
+        eventHandlers[event] ||
+        [];
+
 
     handlers.forEach(
         callback => {
 
             try {
 
-                callback(data);
+                callback(
+                    data
+                );
 
             } catch (error) {
 
@@ -122,21 +163,22 @@ function trigger(event, data) {
 
 
 // ==========================================
-// SOCKET OBJECT
+// SOCKET
 // ==========================================
 
 window.socket = {
 
-    id: socketId,
+    id:
+        socketId,
 
-    connected: true,
+    connected:
+        true,
 
 
-    // ==========================================
-    // ON
-    // ==========================================
-
-    on(event, callback) {
+    on(
+        event,
+        callback
+    ) {
 
         on(
             event,
@@ -146,11 +188,10 @@ window.socket = {
     },
 
 
-    // ==========================================
-    // ONCE
-    // ==========================================
-
-    once(event, callback) {
+    once(
+        event,
+        callback
+    ) {
 
         once(
             event,
@@ -160,16 +201,11 @@ window.socket = {
     },
 
 
-    // ==========================================
-    // EMIT
-    // ==========================================
-
     emit(
         event,
         data,
         callback
     ) {
-
 
         // ======================================
         // JOIN
@@ -186,6 +222,7 @@ window.socket = {
             );
 
             return;
+
         }
 
 
@@ -201,6 +238,7 @@ window.socket = {
             leaveChannel();
 
             return;
+
         }
 
 
@@ -218,6 +256,7 @@ window.socket = {
             );
 
             return;
+
         }
 
 
@@ -233,6 +272,7 @@ window.socket = {
             releaseSpeaking();
 
             return;
+
         }
 
 
@@ -254,10 +294,11 @@ window.socket = {
             if (!target) {
 
                 console.error(
-                    'WebRTC offer: target kosong.'
+                    '❌ Target offer kosong.'
                 );
 
                 return;
+
             }
 
 
@@ -265,15 +306,19 @@ window.socket = {
                 target,
                 'offer',
                 {
+
                     caller:
                         socketId,
 
                     sdp:
-                        data?.sdp
+                        data.sdp
+
                 }
             );
 
+
             return;
+
         }
 
 
@@ -296,10 +341,11 @@ window.socket = {
             if (!target) {
 
                 console.error(
-                    'WebRTC answer: target kosong.'
+                    '❌ Target answer kosong.'
                 );
 
                 return;
+
             }
 
 
@@ -307,20 +353,24 @@ window.socket = {
                 target,
                 'answer',
                 {
+
                     callee:
                         socketId,
 
                     sdp:
-                        data?.sdp
+                        data.sdp
+
                 }
             );
 
+
             return;
+
         }
 
 
         // ======================================
-        // ICE CANDIDATE
+        // ICE
         // ======================================
 
         if (
@@ -338,10 +388,11 @@ window.socket = {
             if (!target) {
 
                 console.error(
-                    'WebRTC ICE: target kosong.'
+                    '❌ Target ICE kosong.'
                 );
 
                 return;
+
             }
 
 
@@ -349,33 +400,35 @@ window.socket = {
                 target,
                 'ice',
                 {
+
                     sender:
                         socketId,
 
                     candidate:
-                        data?.candidate
+                        data.candidate
+
                 }
             );
 
+
             return;
+
         }
-
-
-        console.warn(
-            'Socket event tidak dikenal:',
-            event
-        );
 
     },
 
 
-    // ==========================================
-    // CONNECT
-    // ==========================================
-
     connect() {
 
-        this.connected = true;
+        this.connected =
+            true;
+
+
+        console.log(
+            '🟢 Firebase socket connected:',
+            socketId
+        );
+
 
         trigger(
             'connect'
@@ -384,15 +437,14 @@ window.socket = {
     },
 
 
-    // ==========================================
-    // DISCONNECT
-    // ==========================================
-
     disconnect() {
 
         leaveChannel();
 
-        this.connected = false;
+
+        this.connected =
+            false;
+
 
         trigger(
             'disconnect'
@@ -415,39 +467,16 @@ async function joinChannel(
     try {
 
         // ======================================
-        // VALIDASI
+        // RESET PREVIOUS
         // ======================================
 
-        if (
-            !data ||
-            !data.channelCode ||
-            !data.username
-        ) {
+        knownUserIds.clear();
 
-            if (callback) {
-
-                callback({
-
-                    success: false,
-
-                    message:
-                        'Channel dan username wajib diisi.'
-
-                });
-
-            }
-
-            return;
-        }
-
-
-        // ======================================
-        // SAVE CHANNEL
-        // ======================================
 
         currentChannel =
             String(
-                data.channelCode
+                data.channelCode ||
+                ''
             )
                 .trim()
                 .toUpperCase();
@@ -455,16 +484,29 @@ async function joinChannel(
 
         currentUsername =
             String(
-                data.username
+                data.username ||
+                ''
             )
                 .trim();
 
 
-        // ======================================
-        // RESET SIGNAL CACHE
-        // ======================================
+        if (
+            !currentChannel ||
+            !currentUsername
+        ) {
 
-        processedSignals.clear();
+            throw new Error(
+                'Channel atau username kosong.'
+            );
+
+        }
+
+
+        console.log(
+            '🚪 Join channel:',
+            currentChannel,
+            currentUsername
+        );
 
 
         // ======================================
@@ -478,10 +520,6 @@ async function joinChannel(
             );
 
 
-        // ======================================
-        // CURRENT USER REF
-        // ======================================
-
         const userRef =
             ref(
                 database,
@@ -490,7 +528,7 @@ async function joinChannel(
 
 
         // ======================================
-        // USER DATA
+        // REGISTER USER
         // ======================================
 
         await set(
@@ -511,7 +549,7 @@ async function joinChannel(
 
 
         // ======================================
-        // AUTO DELETE
+        // AUTO REMOVE
         // ======================================
 
         await onDisconnect(
@@ -520,7 +558,7 @@ async function joinChannel(
 
 
         // ======================================
-        // GET EXISTING USERS
+        // GET CURRENT USERS
         // ======================================
 
         const snapshot =
@@ -529,7 +567,8 @@ async function joinChannel(
             );
 
 
-        const users = [];
+        const users =
+            [];
 
 
         snapshot.forEach(
@@ -540,8 +579,15 @@ async function joinChannel(
 
 
                 if (!user) {
+
                     return;
+
                 }
+
+
+                knownUserIds.add(
+                    child.key
+                );
 
 
                 users.push({
@@ -558,8 +604,23 @@ async function joinChannel(
         );
 
 
+        console.log(
+            '👥 Existing users:',
+            users
+        );
+
+
         // ======================================
-        // USER JOINED
+        // UI EXISTING USERS
+        // ======================================
+
+        // Jangan membuat offer di sini secara
+        // langsung karena kita gunakan aturan
+        // deterministic berdasarkan socket ID.
+
+
+        // ======================================
+        // USER ADDED
         // ======================================
 
         const unsubscribeAdded =
@@ -567,13 +628,17 @@ async function joinChannel(
                 usersRef,
                 snapshot => {
 
-                    // Jangan proses diri sendiri.
+                    const targetId =
+                        snapshot.key;
+
+
                     if (
-                        snapshot.key ===
+                        targetId ===
                         socketId
                     ) {
 
                         return;
+
                     }
 
 
@@ -582,14 +647,16 @@ async function joinChannel(
 
 
                     if (!user) {
+
                         return;
+
                     }
 
 
                     const userData = {
 
                         socketId:
-                            snapshot.key,
+                            targetId,
 
                         username:
                             user.username
@@ -597,49 +664,88 @@ async function joinChannel(
                     };
 
 
-                    // ======================================
-                    // UI USER
-                    // ======================================
+                    // ==================================
+                    // USER SUDAH DIKETAHUI
+                    // ==================================
+
+                    const alreadyKnown =
+                        knownUserIds.has(
+                            targetId
+                        );
+
+
+                    knownUserIds.add(
+                        targetId
+                    );
+
 
                     if (
                         typeof window.uiAddUser ===
                         'function'
                     ) {
 
-                        window.uiAddUser(
-                            userData
-                        );
+                        // Hanya UI.
+                        // main.js sudah menambahkan
+                        // existing users dari callback.
+
+                        if (
+                            !alreadyKnown
+                        ) {
+
+                            window.uiAddUser(
+                                userData
+                            );
+
+                        }
 
                     }
 
 
-                    // ======================================
-                    // WEBRTC
-                    //
-                    // User lama menjadi caller
-                    // ketika user baru masuk.
-                    // ======================================
+                    // ==================================
+                    // DECIDE WHO CREATES OFFER
+                    // ==================================
+
+                    /*
+                     * Hanya socket ID yang lebih kecil
+                     * yang membuat offer.
+                     *
+                     * Ini mencegah:
+                     *
+                     * A -> offer
+                     * B -> offer
+                     *
+                     * secara bersamaan.
+                     */
 
                     if (
-                        typeof window.createPeerConnection ===
-                        'function'
+                        socketId <
+                        targetId
                     ) {
 
-                        try {
+                        console.log(
+                            '📞 Saya menjadi caller:',
+                            targetId
+                        );
+
+
+                        if (
+                            typeof window.createPeerConnection ===
+                            'function'
+                        ) {
 
                             window.createPeerConnection(
-                                snapshot.key,
+                                targetId,
                                 true
                             );
 
-                        } catch (error) {
-
-                            console.error(
-                                'Gagal membuat PeerConnection:',
-                                error
-                            );
-
                         }
+
+                    } else {
+
+                        console.log(
+                            '📞 Saya menunggu offer:',
+                            targetId
+                        );
 
                     }
 
@@ -659,7 +765,69 @@ async function joinChannel(
 
 
         // ======================================
-        // USER LEFT
+        // CREATE OFFER FOR EXISTING USERS
+        // ======================================
+
+        /*
+         * Firebase onChildAdded akan mengirim
+         * existing children setelah listener aktif.
+         *
+         * Karena knownUserIds sudah berisi semua
+         * user dari snapshot, kita perlu melakukan
+         * initial connection secara manual.
+         */
+
+        for (
+            const user of users
+        ) {
+
+            if (
+                user.socketId ===
+                socketId
+            ) {
+
+                continue;
+
+            }
+
+
+            if (
+                socketId <
+                user.socketId
+            ) {
+
+                console.log(
+                    '📞 Membuat initial offer:',
+                    user.socketId
+                );
+
+
+                if (
+                    typeof window.createPeerConnection ===
+                    'function'
+                ) {
+
+                    window.createPeerConnection(
+                        user.socketId,
+                        true
+                    );
+
+                }
+
+            } else {
+
+                console.log(
+                    '📞 Menunggu initial offer:',
+                    user.socketId
+                );
+
+            }
+
+        }
+
+
+        // ======================================
+        // USER REMOVED
         // ======================================
 
         const unsubscribeRemoved =
@@ -671,9 +839,10 @@ async function joinChannel(
                         snapshot.key;
 
 
-                    // ======================================
-                    // UI
-                    // ======================================
+                    knownUserIds.delete(
+                        leftId
+                    );
+
 
                     if (
                         typeof window.uiRemoveUser ===
@@ -687,29 +856,14 @@ async function joinChannel(
                     }
 
 
-                    // ======================================
-                    // WEBRTC CLOSE
-                    // ======================================
-
                     if (
                         typeof window.closePeerConnection ===
                         'function'
                     ) {
 
-                        try {
-
-                            window.closePeerConnection(
-                                leftId
-                            );
-
-                        } catch (error) {
-
-                            console.error(
-                                'Gagal menutup PeerConnection:',
-                                error
-                            );
-
-                        }
+                        window.closePeerConnection(
+                            leftId
+                        );
 
                     }
 
@@ -717,8 +871,10 @@ async function joinChannel(
                     trigger(
                         'user-left',
                         {
+
                             socketId:
                                 leftId
+
                         }
                     );
 
@@ -732,7 +888,7 @@ async function joinChannel(
 
 
         // ======================================
-        // WEBRTC SIGNALS
+        // SIGNAL LISTENER
         // ======================================
 
         listenSignals();
@@ -746,7 +902,7 @@ async function joinChannel(
 
 
         // ======================================
-        // CONNECTION
+        // STATUS
         // ======================================
 
         updateConnectionStatus(
@@ -756,19 +912,13 @@ async function joinChannel(
 
 
         console.log(
-            'Firebase connected:',
+            '✅ Firebase connected:',
             socketId
         );
 
 
-        console.log(
-            'Joined channel:',
-            currentChannel
-        );
-
-
         // ======================================
-        // CALLBACK
+        // CALLBACK MAIN.JS
         // ======================================
 
         if (callback) {
@@ -795,10 +945,11 @@ async function joinChannel(
 
         }
 
+
     } catch (error) {
 
         console.error(
-            'Firebase join error:',
+            '❌ Firebase join error:',
             error
         );
 
@@ -865,27 +1016,28 @@ async function sendSignal(
 ) {
 
     if (
-        !currentChannel ||
-        !targetId
+        !currentChannel
     ) {
 
         console.warn(
-            'Signal dibatalkan: channel atau target kosong.'
+            'Tidak ada channel aktif.'
         );
 
         return;
+
     }
 
 
     if (
-        !data
+        !targetId
     ) {
 
         console.warn(
-            'Signal dibatalkan: data kosong.'
+            'Target signal kosong.'
         );
 
         return;
+
     }
 
 
@@ -925,20 +1077,17 @@ async function sendSignal(
 
 
         console.log(
-            `WebRTC signal terkirim: ${type}`,
-            {
-                from:
-                    socketId,
-
-                to:
-                    targetId
-            }
+            '📡 Signal terkirim:',
+            type,
+            '→',
+            targetId
         );
+
 
     } catch (error) {
 
         console.error(
-            'Gagal mengirim WebRTC signal:',
+            '❌ Gagal mengirim WebRTC signal:',
             error
         );
 
@@ -953,8 +1102,12 @@ async function sendSignal(
 
 function listenSignals() {
 
-    if (!currentChannel) {
+    if (
+        !currentChannel
+    ) {
+
         return;
+
     }
 
 
@@ -975,58 +1128,35 @@ function listenSignals() {
 
 
                 if (!signal) {
+
                     return;
+
                 }
 
 
-                const signalId =
-                    snapshot.key;
-
-
-                // ======================================
-                // ANTI DUPLICATE
-                // ======================================
-
-                if (
-                    processedSignals.has(
-                        signalId
-                    )
-                ) {
-
-                    return;
-                }
-
-
-                processedSignals.add(
-                    signalId
+                console.log(
+                    '📡 Signal diterima:',
+                    signal.type,
+                    'dari',
+                    signal.sender
                 );
 
 
                 try {
 
-                    // ======================================
+                    // ==================================
                     // OFFER
-                    // ======================================
+                    // ==================================
 
                     if (
                         signal.type ===
                         'offer'
                     ) {
 
-                        console.log(
-                            '📥 WebRTC OFFER diterima:',
-                            signal.sender
-                        );
-
-
                         if (
                             typeof window.handleWebRTCOffer ===
                             'function'
                         ) {
-
-                            // PENTING:
-                            // tunggu sampai handler selesai
-                            // sebelum signal dihapus.
 
                             await window.handleWebRTCOffer(
 
@@ -1042,20 +1172,14 @@ function listenSignals() {
                     }
 
 
-                    // ======================================
+                    // ==================================
                     // ANSWER
-                    // ======================================
+                    // ==================================
 
                     else if (
                         signal.type ===
                         'answer'
                     ) {
-
-                        console.log(
-                            '📥 WebRTC ANSWER diterima:',
-                            signal.sender
-                        );
-
 
                         if (
                             typeof window.handleWebRTCAnswer ===
@@ -1076,20 +1200,14 @@ function listenSignals() {
                     }
 
 
-                    // ======================================
+                    // ==================================
                     // ICE
-                    // ======================================
+                    // ==================================
 
                     else if (
                         signal.type ===
                         'ice'
                     ) {
-
-                        console.log(
-                            '📥 WebRTC ICE diterima:',
-                            signal.sender
-                        );
-
 
                         if (
                             typeof window.handleNewICECandidate ===
@@ -1110,57 +1228,34 @@ function listenSignals() {
                     }
 
 
-                    else {
+                    // ==================================
+                    // DELETE AFTER SUCCESS
+                    // ==================================
 
-                        console.warn(
-                            'Signal WebRTC tidak dikenal:',
-                            signal.type
-                        );
-
-                    }
-
-
-                    // ======================================
-                    // DELETE SIGNAL
-                    //
-                    // Hanya setelah signal selesai diproses.
-                    // ======================================
-
-                    try {
-
-                        await remove(
-                            snapshot.ref
-                        );
+                    await remove(
+                        snapshot.ref
+                    );
 
 
-                        console.log(
-                            `Signal ${signal.type} selesai diproses dan dihapus.`
-                        );
+                    console.log(
+                        '🗑️ Signal selesai diproses:',
+                        signal.type
+                    );
 
-                    } catch (error) {
-
-                        console.error(
-                            'Signal delete error:',
-                            error
-                        );
-
-                    }
 
                 } catch (error) {
 
                     console.error(
-                        'Signal processing error:',
+                        '❌ Signal processing error:',
                         error
                     );
 
-                    // Kalau gagal diproses,
-                    // JANGAN langsung menghapus signal.
-                    // WebRTC masih bisa mencoba memprosesnya
-                    // setelah koneksi siap.
-
-                    processedSignals.delete(
-                        signalId
-                    );
+                    /*
+                     * Jangan langsung menghapus signal
+                     * jika processing gagal.
+                     *
+                     * Ini membantu debugging dan retry.
+                     */
 
                 }
 
@@ -1183,7 +1278,9 @@ async function requestSpeaking(
     callback
 ) {
 
-    if (!currentChannel) {
+    if (
+        !currentChannel
+    ) {
 
         if (callback) {
 
@@ -1200,6 +1297,7 @@ async function requestSpeaking(
         }
 
         return;
+
     }
 
 
@@ -1217,10 +1315,7 @@ async function requestSpeaking(
                 speakerRef,
                 currentSpeaker => {
 
-                    // ==================================
-                    // CHANNEL KOSONG
-                    // ==================================
-
+                    // Channel kosong
                     if (
                         currentSpeaker ===
                         null
@@ -1242,10 +1337,7 @@ async function requestSpeaking(
                     }
 
 
-                    // ==================================
-                    // SUDAH DIMILIKI SENDIRI
-                    // ==================================
-
+                    // Sudah menjadi speaker
                     if (
                         currentSpeaker &&
                         currentSpeaker.socketId ===
@@ -1257,10 +1349,7 @@ async function requestSpeaking(
                     }
 
 
-                    // ==================================
-                    // ORANG LAIN SEDANG BICARA
-                    // ==================================
-
+                    // Sedang digunakan orang lain
                     return;
 
                 }
@@ -1285,10 +1374,11 @@ async function requestSpeaking(
 
         }
 
+
     } catch (error) {
 
         console.error(
-            'Request speaking error:',
+            '❌ Request speaking error:',
             error
         );
 
@@ -1318,8 +1408,12 @@ async function requestSpeaking(
 
 async function releaseSpeaking() {
 
-    if (!currentChannel) {
+    if (
+        !currentChannel
+    ) {
+
         return;
+
     }
 
 
@@ -1354,15 +1448,16 @@ async function releaseSpeaking() {
 
 
             console.log(
-                'Speaking lock dilepas.'
+                '🎙️ Speaker released.'
             );
 
         }
 
+
     } catch (error) {
 
         console.error(
-            'Release speaking error:',
+            '❌ Release speaking error:',
             error
         );
 
@@ -1377,8 +1472,12 @@ async function releaseSpeaking() {
 
 function listenSpeaker() {
 
-    if (!currentChannel) {
+    if (
+        !currentChannel
+    ) {
+
         return;
+
     }
 
 
@@ -1398,9 +1497,9 @@ function listenSpeaker() {
                     snapshot.val();
 
 
-                // ======================================
-                // TIDAK ADA SPEAKER
-                // ======================================
+                // ==================================
+                // NO SPEAKER
+                // ==================================
 
                 if (!speaker) {
 
@@ -1419,19 +1518,22 @@ function listenSpeaker() {
                     trigger(
                         'speaking-stop',
                         {
+
                             socketId:
                                 null
+
                         }
                     );
 
 
                     return;
+
                 }
 
 
-                // ======================================
-                // DIRI SENDIRI
-                // ======================================
+                // ==================================
+                // MYSELF
+                // ==================================
 
                 if (
                     speaker.socketId ===
@@ -1439,12 +1541,13 @@ function listenSpeaker() {
                 ) {
 
                     return;
+
                 }
 
 
-                // ======================================
-                // USER LAIN
-                // ======================================
+                // ==================================
+                // OTHER USER
+                // ==================================
 
                 if (
                     typeof window.uiSetSpeaker ===
@@ -1492,8 +1595,12 @@ function listenSpeaker() {
 
 async function leaveChannel() {
 
-    if (!currentChannel) {
+    if (
+        !currentChannel
+    ) {
+
         return;
+
     }
 
 
@@ -1505,11 +1612,14 @@ async function leaveChannel() {
         null;
 
 
+    knownUserIds.clear();
+
+
     try {
 
-        // ======================================
+        // ==================================
         // REMOVE USER
-        // ======================================
+        // ==================================
 
         const userRef =
             ref(
@@ -1523,9 +1633,9 @@ async function leaveChannel() {
         );
 
 
-        // ======================================
-        // RELEASE SPEAKER
-        // ======================================
+        // ==================================
+        // REMOVE SPEAKER
+        // ==================================
 
         const speakerRef =
             ref(
@@ -1556,10 +1666,11 @@ async function leaveChannel() {
 
         }
 
+
     } catch (error) {
 
         console.error(
-            'Leave channel error:',
+            '❌ Leave channel error:',
             error
         );
 
@@ -1567,7 +1678,7 @@ async function leaveChannel() {
 
 
     // ======================================
-    // UNSUBSCRIBE FIREBASE
+    // UNSUBSCRIBE
     // ======================================
 
     firebaseUnsubscribers.forEach(
@@ -1594,19 +1705,12 @@ async function leaveChannel() {
         0;
 
 
-    // ======================================
-    // RESET SIGNAL CACHE
-    // ======================================
-
-    processedSignals.clear();
-
-
     currentUsername =
         null;
 
 
     console.log(
-        'Keluar dari channel:',
+        '🚪 Leave channel:',
         channel
     );
 
@@ -1614,7 +1718,7 @@ async function leaveChannel() {
 
 
 // ==========================================
-// UI CONNECTION
+// UI CONNECTION STATUS
 // ==========================================
 
 function updateConnectionStatus(
@@ -1645,18 +1749,6 @@ window.socket.connect();
 
 
 console.log(
-    '=========================================='
-);
-
-console.log(
-    'Firebase socket adapter loaded'
-);
-
-console.log(
-    'Socket ID:',
+    '✅ Firebase socket adapter loaded:',
     socketId
-);
-
-console.log(
-    '=========================================='
 );

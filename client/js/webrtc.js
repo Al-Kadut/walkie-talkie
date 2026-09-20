@@ -1,6 +1,6 @@
 // ==========================================
-// WEBRTC AUDIO ENGINE
-// Firebase Signaling Compatible
+// WALKIE TALKIE - WEBRTC AUDIO ENGINE
+// Firebase Signaling
 // ==========================================
 
 const peerConnections = {};
@@ -17,17 +17,14 @@ const rtcConfig = {
 
     iceServers: [
 
-        // Google STUN
         {
             urls: 'stun:stun.l.google.com:19302'
         },
 
-        // Twilio STUN
         {
             urls: 'stun:global.stun.twilio.com:3478'
         },
 
-        // OpenRelay TURN
         {
             urls: 'turn:openrelay.metered.ca:80',
             username: 'openrelayproject',
@@ -70,11 +67,13 @@ async function initLocalAudio() {
 
     try {
 
-        if (!navigator.mediaDevices ||
-            !navigator.mediaDevices.getUserMedia) {
+        if (
+            !navigator.mediaDevices ||
+            !navigator.mediaDevices.getUserMedia
+        ) {
 
             console.error(
-                'Browser tidak mendukung getUserMedia.'
+                'Browser tidak mendukung microphone.'
             );
 
             return false;
@@ -82,7 +81,7 @@ async function initLocalAudio() {
 
 
         console.log(
-            'Meminta izin microphone...'
+            '🎙️ Meminta izin microphone...'
         );
 
 
@@ -106,28 +105,26 @@ async function initLocalAudio() {
             });
 
 
+        // Simpan juga ke window
+        window.localStream =
+            localStream;
+
+
         console.log(
-            'Microphone berhasil aktif.'
+            '✅ Microphone berhasil aktif.'
         );
 
 
-        // ======================================
-        // MUTE AWAL
-        // ======================================
-
+        // Mute awal
         muteMic();
 
-
-        // ======================================
-        // INFO TRACK
-        // ======================================
 
         localStream
             .getAudioTracks()
             .forEach(track => {
 
                 console.log(
-                    'Local audio track:',
+                    '🎤 Local audio track:',
                     {
                         id: track.id,
                         enabled: track.enabled,
@@ -141,24 +138,31 @@ async function initLocalAudio() {
 
         return true;
 
+
     } catch (error) {
 
         console.error(
-            'Error mengakses microphone:',
+            '❌ Error microphone:',
             error
         );
 
 
-        if (error.name === 'NotAllowedError') {
+        if (
+            error.name ===
+            'NotAllowedError'
+        ) {
 
             alert(
-                'Izin microphone ditolak. Silakan izinkan microphone pada browser.'
+                'Izin microphone ditolak. Izinkan microphone pada browser.'
             );
 
         }
 
 
-        if (error.name === 'NotFoundError') {
+        if (
+            error.name ===
+            'NotFoundError'
+        ) {
 
             alert(
                 'Microphone tidak ditemukan.'
@@ -181,7 +185,9 @@ async function initLocalAudio() {
 function muteMic() {
 
     if (!localStream) {
+
         return;
+
     }
 
 
@@ -195,7 +201,7 @@ function muteMic() {
 
 
     console.log(
-        'Microphone: MUTED'
+        '🎙️ Microphone: MUTED'
     );
 
 }
@@ -214,6 +220,7 @@ function unmuteMic() {
         );
 
         return;
+
     }
 
 
@@ -227,7 +234,7 @@ function unmuteMic() {
 
 
     console.log(
-        'Microphone: UNMUTED'
+        '🎙️ Microphone: UNMUTED'
     );
 
 
@@ -236,12 +243,82 @@ function unmuteMic() {
         .forEach(track => {
 
             console.log(
-                'Audio track aktif:',
-                track.enabled,
-                track.readyState
+                'Audio track:',
+                {
+                    enabled: track.enabled,
+                    muted: track.muted,
+                    readyState: track.readyState
+                }
             );
 
         });
+
+}
+
+
+// ==========================================
+// ADD LOCAL TRACKS
+// ==========================================
+
+function addLocalTracksToPeer(pc) {
+
+    if (!localStream) {
+
+        console.warn(
+            'localStream belum tersedia.'
+        );
+
+        return;
+
+    }
+
+
+    const tracks =
+        localStream.getAudioTracks();
+
+
+    tracks.forEach(track => {
+
+        try {
+
+            const alreadyAdded =
+                pc.getSenders()
+                    .some(
+                        sender =>
+                            sender.track &&
+                            sender.track.id ===
+                            track.id
+                    );
+
+
+            if (alreadyAdded) {
+
+                return;
+
+            }
+
+
+            pc.addTrack(
+                track,
+                localStream
+            );
+
+
+            console.log(
+                '✅ Local audio track ditambahkan ke PeerConnection.'
+            );
+
+
+        } catch (error) {
+
+            console.error(
+                '❌ Gagal addTrack:',
+                error
+            );
+
+        }
+
+    });
 
 }
 
@@ -252,33 +329,42 @@ function unmuteMic() {
 
 function createPeerConnection(
     targetSocketId,
-    isCaller
+    isCaller = false
 ) {
 
     console.log(
-        'Create PeerConnection:',
+        '🔗 Create PeerConnection:',
         targetSocketId,
         'caller:',
         isCaller
     );
 
 
-    // ==========================================
-    // CEK EXISTING CONNECTION
-    // ==========================================
+    // ======================================
+    // EXISTING CONNECTION
+    // ======================================
 
     if (
         peerConnections[targetSocketId]
     ) {
 
-        return peerConnections[targetSocketId];
+        const existing =
+            peerConnections[targetSocketId];
+
+
+        addLocalTracksToPeer(
+            existing
+        );
+
+
+        return existing;
 
     }
 
 
-    // ==========================================
-    // CREATE PC
-    // ==========================================
+    // ======================================
+    // CREATE
+    // ======================================
 
     const pc =
         new RTCPeerConnection(
@@ -294,69 +380,92 @@ function createPeerConnection(
         [];
 
 
-    // ==========================================
-    // ADD LOCAL AUDIO
-    // ==========================================
+    // ======================================
+    // LOCAL AUDIO
+    // ======================================
 
-    if (localStream) {
-
-        const audioTracks =
-            localStream.getAudioTracks();
-
-
-        audioTracks.forEach(
-            track => {
-
-                try {
-
-                    pc.addTrack(
-                        track,
-                        localStream
-                    );
+    addLocalTracksToPeer(
+        pc
+    );
 
 
-                    console.log(
-                        'Local audio track ditambahkan ke PeerConnection:',
-                        targetSocketId
-                    );
+    // ======================================
+    // RECEIVE AUDIO
+    // ======================================
 
-                } catch (error) {
-
-                    console.error(
-                        'Gagal addTrack:',
-                        error
-                    );
-
-                }
-
-            }
-        );
-
-    } else {
-
-        console.warn(
-            'localStream belum tersedia saat PeerConnection dibuat.'
-        );
-
-    }
+    pc.addTransceiver(
+        'audio',
+        {
+            direction: 'sendrecv'
+        }
+    );
 
 
-    // ==========================================
+    // ======================================
     // ICE CANDIDATE
-    // ==========================================
+    // ======================================
 
     pc.onicecandidate =
         event => {
 
-            if (!event.candidate) {
+            if (
+                !event.candidate
+            ) {
+
                 return;
+
             }
 
 
             console.log(
-                'Mengirim ICE candidate:',
+                '🧊 Mengirim ICE candidate:',
                 targetSocketId
             );
+
+
+            let candidate;
+
+
+            try {
+
+                if (
+                    typeof event.candidate.toJSON ===
+                    'function'
+                ) {
+
+                    candidate =
+                        event.candidate.toJSON();
+
+                } else {
+
+                    candidate = {
+
+                        candidate:
+                            event.candidate.candidate,
+
+                        sdpMid:
+                            event.candidate.sdpMid,
+
+                        sdpMLineIndex:
+                            event.candidate.sdpMLineIndex,
+
+                        usernameFragment:
+                            event.candidate.usernameFragment
+
+                    };
+
+                }
+
+            } catch (error) {
+
+                console.error(
+                    'Gagal membuat ICE JSON:',
+                    error
+                );
+
+                return;
+
+            }
 
 
             if (
@@ -372,7 +481,7 @@ function createPeerConnection(
                             targetSocketId,
 
                         candidate:
-                            event.candidate
+                            candidate
 
                     }
                 );
@@ -382,15 +491,15 @@ function createPeerConnection(
         };
 
 
-    // ==========================================
+    // ======================================
     // REMOTE AUDIO
-    // ==========================================
+    // ======================================
 
     pc.ontrack =
         event => {
 
             console.log(
-                'REMOTE AUDIO TRACK DITERIMA:',
+                '🔊 REMOTE AUDIO TRACK DITERIMA:',
                 targetSocketId
             );
 
@@ -399,10 +508,6 @@ function createPeerConnection(
                 event.streams &&
                 event.streams[0];
 
-
-            // ======================================
-            // FALLBACK STREAM
-            // ======================================
 
             if (!stream) {
 
@@ -416,9 +521,9 @@ function createPeerConnection(
             }
 
 
-            // ======================================
-            // FIND / CREATE AUDIO
-            // ======================================
+            // ==================================
+            // AUDIO ELEMENT
+            // ==================================
 
             let audioEl =
                 document.getElementById(
@@ -438,22 +543,27 @@ function createPeerConnection(
                     `audio-${targetSocketId}`;
 
 
-                // Mobile compatibility
-                audioEl.autoplay = true;
+                audioEl.autoplay =
+                    true;
 
-                audioEl.playsInline = true;
+                audioEl.playsInline =
+                    true;
 
-                audioEl.controls = false;
+                audioEl.controls =
+                    false;
 
-                audioEl.muted = false;
+                audioEl.muted =
+                    false;
 
-                audioEl.volume = 1.0;
+                audioEl.volume =
+                    1.0;
 
 
                 audioEl.setAttribute(
                     'autoplay',
                     ''
                 );
+
 
                 audioEl.setAttribute(
                     'playsinline',
@@ -478,9 +588,9 @@ function createPeerConnection(
             }
 
 
-            // ======================================
+            // ==================================
             // SET STREAM
-            // ======================================
+            // ==================================
 
             audioEl.srcObject =
                 stream;
@@ -493,33 +603,37 @@ function createPeerConnection(
                 1.0;
 
 
-            // ======================================
-            // TRY PLAY
-            // ======================================
+            // ==================================
+            // PLAY
+            // ==================================
 
             const playAudio =
                 async () => {
 
                     try {
 
+                        audioEl.muted =
+                            false;
+
+                        audioEl.volume =
+                            1.0;
+
+
                         await audioEl.play();
 
+
                         console.log(
-                            'Remote audio PLAYING:',
+                            '🔊 REMOTE AUDIO PLAYING:',
                             targetSocketId
                         );
+
 
                     } catch (error) {
 
                         console.warn(
-                            'Autoplay audio ditolak browser:',
+                            '⚠️ Autoplay ditolak:',
                             error
                         );
-
-
-                        // Simpan fungsi untuk
-                        // dipanggil lagi saat user
-                        // menyentuh layar.
 
                     }
 
@@ -529,15 +643,15 @@ function createPeerConnection(
             playAudio();
 
 
-            // ======================================
+            // ==================================
             // AUDIO EVENTS
-            // ======================================
+            // ==================================
 
             audioEl.onloadedmetadata =
                 () => {
 
                     console.log(
-                        'Audio metadata siap:',
+                        '🔊 Audio metadata siap:',
                         targetSocketId
                     );
 
@@ -550,7 +664,7 @@ function createPeerConnection(
                 () => {
 
                     console.log(
-                        'Audio siap dimainkan:',
+                        '🔊 Audio siap dimainkan:',
                         targetSocketId
                     );
 
@@ -559,15 +673,26 @@ function createPeerConnection(
                 };
 
 
-            // ======================================
+            audioEl.onplaying =
+                () => {
+
+                    console.log(
+                        '🔊 Audio benar-benar PLAYING:',
+                        targetSocketId
+                    );
+
+                };
+
+
+            // ==================================
             // TRACK EVENTS
-            // ======================================
+            // ==================================
 
             event.track.onunmute =
                 () => {
 
                     console.log(
-                        'Remote audio track UNMUTED:',
+                        '🔊 Remote track UNMUTED:',
                         targetSocketId
                     );
 
@@ -580,7 +705,18 @@ function createPeerConnection(
                 () => {
 
                     console.log(
-                        'Remote audio track MUTED:',
+                        '🔇 Remote track MUTED:',
+                        targetSocketId
+                    );
+
+                };
+
+
+            event.track.onended =
+                () => {
+
+                    console.log(
+                        '⛔ Remote track ENDED:',
                         targetSocketId
                     );
 
@@ -589,15 +725,15 @@ function createPeerConnection(
         };
 
 
-    // ==========================================
+    // ======================================
     // CONNECTION STATE
-    // ==========================================
+    // ======================================
 
     pc.onconnectionstatechange =
         () => {
 
             console.log(
-                'WebRTC connection:',
+                '🌐 WebRTC connection:',
                 targetSocketId,
                 pc.connectionState
             );
@@ -622,7 +758,7 @@ function createPeerConnection(
             ) {
 
                 console.error(
-                    'WebRTC connection FAILED:',
+                    '❌ WebRTC connection FAILED:',
                     targetSocketId
                 );
 
@@ -635,7 +771,7 @@ function createPeerConnection(
             ) {
 
                 console.warn(
-                    'WebRTC disconnected:',
+                    '⚠️ WebRTC disconnected:',
                     targetSocketId
                 );
 
@@ -644,15 +780,15 @@ function createPeerConnection(
         };
 
 
-    // ==========================================
-    // ICE CONNECTION STATE
-    // ==========================================
+    // ======================================
+    // ICE STATE
+    // ======================================
 
     pc.oniceconnectionstatechange =
         () => {
 
             console.log(
-                'ICE state:',
+                '🧊 ICE state:',
                 targetSocketId,
                 pc.iceConnectionState
             );
@@ -660,15 +796,15 @@ function createPeerConnection(
         };
 
 
-    // ==========================================
+    // ======================================
     // ICE GATHERING
-    // ==========================================
+    // ======================================
 
     pc.onicegatheringstatechange =
         () => {
 
             console.log(
-                'ICE gathering:',
+                '🧊 ICE gathering:',
                 targetSocketId,
                 pc.iceGatheringState
             );
@@ -676,15 +812,15 @@ function createPeerConnection(
         };
 
 
-    // ==========================================
+    // ======================================
     // SIGNALING STATE
-    // ==========================================
+    // ======================================
 
     pc.onsignalingstatechange =
         () => {
 
             console.log(
-                'Signaling state:',
+                '📡 Signaling state:',
                 targetSocketId,
                 pc.signalingState
             );
@@ -692,9 +828,9 @@ function createPeerConnection(
         };
 
 
-    // ==========================================
+    // ======================================
     // CALLER
-    // ==========================================
+    // ======================================
 
     if (isCaller) {
 
@@ -723,17 +859,13 @@ async function createOffer(
     try {
 
         console.log(
-            'Membuat WebRTC offer:',
+            '📤 Membuat WebRTC offer:',
             targetSocketId
         );
 
 
         const offer =
-            await pc.createOffer({
-
-                offerToReceiveAudio: true
-
-            });
+            await pc.createOffer();
 
 
         await pc.setLocalDescription(
@@ -741,9 +873,20 @@ async function createOffer(
         );
 
 
+        const offerData = {
+
+            type:
+                pc.localDescription.type,
+
+            sdp:
+                pc.localDescription.sdp
+
+        };
+
+
         console.log(
-            'Mengirim WebRTC offer:',
-            targetSocketId
+            '📤 SDP OFFER:',
+            offerData
         );
 
 
@@ -755,16 +898,22 @@ async function createOffer(
                     targetSocketId,
 
                 sdp:
-                    pc.localDescription
+                    offerData
 
             }
+        );
+
+
+        console.log(
+            '✅ WebRTC offer dikirim:',
+            targetSocketId
         );
 
 
     } catch (error) {
 
         console.error(
-            'Error membuat offer:',
+            '❌ Error membuat offer:',
             error
         );
 
@@ -774,22 +923,90 @@ async function createOffer(
 
 
 // ==========================================
-// HANDLE WEBRTC OFFER
+// HANDLE OFFER
 // ==========================================
 
-async function handleWebRTCOffer(callerId, sdp) {
+async function handleWebRTCOffer(
+    callerId,
+    sdp
+) {
 
     try {
 
         console.log(
-            'WebRTC offer diterima dari:',
+            '📥 WebRTC offer diterima dari:',
             callerId
         );
 
+
         console.log(
-            'SDP OFFER mentah:',
+            '📥 SDP OFFER:',
             sdp
         );
+
+
+        if (
+            !sdp
+        ) {
+
+            throw new Error(
+                'SDP offer kosong.'
+            );
+
+        }
+
+
+        let remoteOffer;
+
+
+        if (
+            typeof sdp ===
+            'string'
+        ) {
+
+            remoteOffer = {
+
+                type:
+                    'offer',
+
+                sdp:
+                    sdp
+
+            };
+
+        } else {
+
+            remoteOffer = {
+
+                type:
+                    sdp.type ||
+                    'offer',
+
+                sdp:
+                    sdp.sdp ||
+                    ''
+
+            };
+
+        }
+
+
+        if (
+            !remoteOffer.sdp
+        ) {
+
+            throw new Error(
+                'SDP offer tidak memiliki sdp.'
+            );
+
+        }
+
+
+        console.log(
+            '📥 Remote offer normalized:',
+            remoteOffer
+        );
+
 
         const pc =
             createPeerConnection(
@@ -799,54 +1016,31 @@ async function handleWebRTCOffer(callerId, sdp) {
 
 
         // ======================================
-        // NORMALISASI SDP OFFER
-        // ======================================
-
-        let remoteOffer;
-
-        if (typeof sdp === 'string') {
-
-            remoteOffer = {
-                type: 'offer',
-                sdp: sdp
-            };
-
-        } else {
-
-            remoteOffer = {
-                type: sdp?.type || 'offer',
-                sdp: sdp?.sdp || ''
-            };
-
-        }
-
-
-        console.log(
-            'SDP OFFER setelah normalisasi:',
-            remoteOffer
-        );
-
-
-        // ======================================
-        // VALIDASI
+        // HANDLE GLARE
         // ======================================
 
         if (
-            !remoteOffer.sdp ||
-            typeof remoteOffer.sdp !== 'string'
+            pc.signalingState ===
+            'have-local-offer'
         ) {
 
-            console.error(
-                '❌ SDP OFFER KOSONG / TIDAK VALID:',
-                remoteOffer
+            console.warn(
+                '⚠️ Offer collision. Rollback local offer.'
             );
 
-            return;
+
+            await pc.setLocalDescription(
+                {
+                    type:
+                        'rollback'
+                }
+            );
+
         }
 
 
         // ======================================
-        // SET REMOTE DESCRIPTION
+        // SET REMOTE OFFER
         // ======================================
 
         await pc.setRemoteDescription(
@@ -861,7 +1055,7 @@ async function handleWebRTCOffer(callerId, sdp) {
 
 
         // ======================================
-        // ADD PENDING ICE
+        // PENDING ICE
         // ======================================
 
         await flushPendingIceCandidates(
@@ -882,14 +1076,25 @@ async function handleWebRTCOffer(callerId, sdp) {
         );
 
 
+        const answerData = {
+
+            type:
+                pc.localDescription.type,
+
+            sdp:
+                pc.localDescription.sdp
+
+        };
+
+
         console.log(
-            'Mengirim WebRTC answer:',
-            callerId
+            '📤 SDP ANSWER:',
+            answerData
         );
 
 
         // ======================================
-        // KIRIM SDP DALAM OBJECT BIASA
+        // SEND ANSWER
         // ======================================
 
         window.socket.emit(
@@ -899,17 +1104,16 @@ async function handleWebRTCOffer(callerId, sdp) {
                 target:
                     callerId,
 
-                sdp: {
-
-                    type:
-                        pc.localDescription.type,
-
-                    sdp:
-                        pc.localDescription.sdp
-
-                }
+                sdp:
+                    answerData
 
             }
+        );
+
+
+        console.log(
+            '✅ WebRTC answer dikirim:',
+            callerId
         );
 
 
@@ -926,7 +1130,7 @@ async function handleWebRTCOffer(callerId, sdp) {
 
 
 // ==========================================
-// HANDLE WEBRTC ANSWER
+// HANDLE ANSWER
 // ==========================================
 
 async function handleWebRTCAnswer(
@@ -937,8 +1141,14 @@ async function handleWebRTCAnswer(
     try {
 
         console.log(
-            'WebRTC answer diterima dari:',
+            '📥 WebRTC answer diterima dari:',
             calleeId
+        );
+
+
+        console.log(
+            '📥 SDP ANSWER:',
+            sdp
         );
 
 
@@ -949,7 +1159,7 @@ async function handleWebRTCAnswer(
         if (!pc) {
 
             console.warn(
-                'PeerConnection tidak ditemukan untuk answer:',
+                'PeerConnection tidak ditemukan:',
                 calleeId
             );
 
@@ -958,15 +1168,74 @@ async function handleWebRTCAnswer(
         }
 
 
+        if (!sdp) {
+
+            throw new Error(
+                'SDP answer kosong.'
+            );
+
+        }
+
+
+        let remoteAnswer;
+
+
+        if (
+            typeof sdp ===
+            'string'
+        ) {
+
+            remoteAnswer = {
+
+                type:
+                    'answer',
+
+                sdp:
+                    sdp
+
+            };
+
+        } else {
+
+            remoteAnswer = {
+
+                type:
+                    sdp.type ||
+                    'answer',
+
+                sdp:
+                    sdp.sdp ||
+                    ''
+
+            };
+
+        }
+
+
+        if (
+            !remoteAnswer.sdp
+        ) {
+
+            throw new Error(
+                'SDP answer tidak memiliki sdp.'
+            );
+
+        }
+
+
+        console.log(
+            '📥 Remote answer normalized:',
+            remoteAnswer
+        );
+
+
         await pc.setRemoteDescription(
-            new RTCSessionDescription(
-                sdp
-            )
+            remoteAnswer
         );
 
 
         console.log(
-            'Remote answer berhasil:',
+            '✅ Remote answer berhasil:',
             calleeId
         );
 
@@ -979,7 +1248,7 @@ async function handleWebRTCAnswer(
     } catch (error) {
 
         console.error(
-            'Error setting remote answer:',
+            '❌ Error setting remote answer:',
             error
         );
 
@@ -999,8 +1268,64 @@ async function handleNewICECandidate(
 
     try {
 
-        if (!candidate) {
+        if (
+            !candidate
+        ) {
+
             return;
+
+        }
+
+
+        let normalizedCandidate;
+
+
+        if (
+            typeof candidate ===
+            'string'
+        ) {
+
+            normalizedCandidate = {
+
+                candidate:
+                    candidate
+
+            };
+
+        } else {
+
+            normalizedCandidate = {
+
+                candidate:
+                    candidate.candidate,
+
+                sdpMid:
+                    candidate.sdpMid ??
+                    null,
+
+                sdpMLineIndex:
+                    candidate.sdpMLineIndex ??
+                    null,
+
+                usernameFragment:
+                    candidate.usernameFragment ??
+                    null
+
+            };
+
+        }
+
+
+        if (
+            !normalizedCandidate.candidate
+        ) {
+
+            console.warn(
+                'ICE candidate kosong.'
+            );
+
+            return;
+
         }
 
 
@@ -1009,13 +1334,13 @@ async function handleNewICECandidate(
 
 
         // ======================================
-        // PC BELUM SIAP
+        // PC BELUM ADA
         // ======================================
 
         if (!pc) {
 
             console.log(
-                'ICE datang sebelum PeerConnection siap. Disimpan:',
+                '🧊 ICE datang sebelum PeerConnection. Disimpan:',
                 senderId
             );
 
@@ -1031,7 +1356,9 @@ async function handleNewICECandidate(
 
 
             pendingIceCandidates[senderId]
-                .push(candidate);
+                .push(
+                    normalizedCandidate
+                );
 
 
             return;
@@ -1040,7 +1367,7 @@ async function handleNewICECandidate(
 
 
         // ======================================
-        // REMOTE DESCRIPTION BELUM SIAP
+        // REMOTE SDP BELUM ADA
         // ======================================
 
         if (
@@ -1049,7 +1376,7 @@ async function handleNewICECandidate(
         ) {
 
             console.log(
-                'Remote description belum siap. ICE disimpan:',
+                '🧊 Remote SDP belum siap. ICE disimpan:',
                 senderId
             );
 
@@ -1065,7 +1392,9 @@ async function handleNewICECandidate(
 
 
             pendingIceCandidates[senderId]
-                .push(candidate);
+                .push(
+                    normalizedCandidate
+                );
 
 
             return;
@@ -1079,13 +1408,13 @@ async function handleNewICECandidate(
 
         await pc.addIceCandidate(
             new RTCIceCandidate(
-                candidate
+                normalizedCandidate
             )
         );
 
 
         console.log(
-            'ICE candidate berhasil ditambahkan:',
+            '✅ ICE candidate berhasil ditambahkan:',
             senderId
         );
 
@@ -1093,7 +1422,7 @@ async function handleNewICECandidate(
     } catch (error) {
 
         console.error(
-            'Error adding ICE candidate:',
+            '❌ Error adding ICE candidate:',
             error
         );
 
@@ -1115,7 +1444,9 @@ async function flushPendingIceCandidates(
 
 
     if (!pc) {
+
         return;
+
     }
 
 
@@ -1123,21 +1454,29 @@ async function flushPendingIceCandidates(
         !pc.remoteDescription ||
         !pc.remoteDescription.type
     ) {
+
         return;
+
     }
 
 
     const candidates =
-        pendingIceCandidates[socketId] || [];
+        pendingIceCandidates[socketId] ||
+        [];
 
 
-    if (!candidates.length) {
+    if (
+        !candidates.length
+    ) {
+
         return;
+
     }
 
 
     console.log(
-        `Menambahkan ${candidates.length} ICE candidate tertunda untuk ${socketId}`
+        `🧊 Menambahkan ${candidates.length} pending ICE:`,
+        socketId
     );
 
 
@@ -1157,10 +1496,17 @@ async function flushPendingIceCandidates(
                 )
             );
 
+
+            console.log(
+                '✅ Pending ICE ditambahkan:',
+                socketId
+            );
+
+
         } catch (error) {
 
             console.error(
-                'Gagal menambahkan pending ICE:',
+                '❌ Gagal pending ICE:',
                 error
             );
 
@@ -1187,9 +1533,11 @@ function closePeerConnection(
 
         try {
 
-            pc.ontrack = null;
+            pc.ontrack =
+                null;
 
-            pc.onicecandidate = null;
+            pc.onicecandidate =
+                null;
 
             pc.close();
 
@@ -1215,10 +1563,6 @@ function closePeerConnection(
     ];
 
 
-    // ==========================================
-    // REMOVE AUDIO
-    // ==========================================
-
     const audioEl =
         document.getElementById(
             `audio-${targetSocketId}`
@@ -1232,11 +1576,12 @@ function closePeerConnection(
             audioEl.pause();
 
         } catch (error) {
-            // Ignore
+
         }
 
 
-        audioEl.srcObject = null;
+        audioEl.srcObject =
+            null;
 
         audioEl.remove();
 
@@ -1269,10 +1614,6 @@ function closeAllPeerConnections() {
 // ==========================================
 // UNLOCK REMOTE AUDIO
 // ==========================================
-//
-// Browser HP terkadang membutuhkan interaksi
-// pengguna sebelum audio remote boleh dimainkan.
-//
 
 async function unlockRemoteAudio() {
 
@@ -1288,16 +1629,21 @@ async function unlockRemoteAudio() {
 
         try {
 
-            audioEl.muted = false;
+            audioEl.muted =
+                false;
 
-            audioEl.volume = 1.0;
+            audioEl.volume =
+                1.0;
+
 
             await audioEl.play();
 
+
             console.log(
-                'Remote audio unlocked:',
+                '🔊 Remote audio unlocked:',
                 audioEl.id
             );
+
 
         } catch (error) {
 
@@ -1315,7 +1661,7 @@ async function unlockRemoteAudio() {
 
 
 // ==========================================
-// UNLOCK AUDIO SAAT USER MENYENTUH LAYAR
+// USER INTERACTION
 // ==========================================
 
 document.addEventListener(
@@ -1332,7 +1678,7 @@ document.addEventListener(
 
 
 // ==========================================
-// DEBUG GLOBAL
+// DEBUG
 // ==========================================
 
 window.getWebRTCDebug =
@@ -1376,7 +1722,10 @@ window.getWebRTCDebug =
         );
 
 
-        console.table(result);
+        console.table(
+            result
+        );
+
 
         return result;
 
@@ -1384,7 +1733,7 @@ window.getWebRTCDebug =
 
 
 // ==========================================
-// EXPORT TO WINDOW
+// EXPORT
 // ==========================================
 
 window.initLocalAudio =
@@ -1423,5 +1772,5 @@ window.unlockRemoteAudio =
 // ==========================================
 
 console.log(
-    'WebRTC audio engine loaded.'
+    '✅ WebRTC audio engine loaded.'
 );
