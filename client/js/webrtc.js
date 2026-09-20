@@ -777,10 +777,7 @@ async function createOffer(
 // HANDLE WEBRTC OFFER
 // ==========================================
 
-async function handleWebRTCOffer(
-    callerId,
-    sdp
-) {
+async function handleWebRTCOffer(callerId, sdp) {
 
     try {
 
@@ -789,6 +786,10 @@ async function handleWebRTCOffer(
             callerId
         );
 
+        console.log(
+            'SDP OFFER mentah:',
+            sdp
+        );
 
         const pc =
             createPeerConnection(
@@ -798,18 +799,63 @@ async function handleWebRTCOffer(
 
 
         // ======================================
+        // NORMALISASI SDP OFFER
+        // ======================================
+
+        let remoteOffer;
+
+        if (typeof sdp === 'string') {
+
+            remoteOffer = {
+                type: 'offer',
+                sdp: sdp
+            };
+
+        } else {
+
+            remoteOffer = {
+                type: sdp?.type || 'offer',
+                sdp: sdp?.sdp || ''
+            };
+
+        }
+
+
+        console.log(
+            'SDP OFFER setelah normalisasi:',
+            remoteOffer
+        );
+
+
+        // ======================================
+        // VALIDASI
+        // ======================================
+
+        if (
+            !remoteOffer.sdp ||
+            typeof remoteOffer.sdp !== 'string'
+        ) {
+
+            console.error(
+                '❌ SDP OFFER KOSONG / TIDAK VALID:',
+                remoteOffer
+            );
+
+            return;
+        }
+
+
+        // ======================================
         // SET REMOTE DESCRIPTION
         // ======================================
 
         await pc.setRemoteDescription(
-            new RTCSessionDescription(
-                sdp
-            )
+            remoteOffer
         );
 
 
         console.log(
-            'Remote description berhasil:',
+            '✅ Remote description berhasil:',
             callerId
         );
 
@@ -828,11 +874,7 @@ async function handleWebRTCOffer(
         // ======================================
 
         const answer =
-            await pc.createAnswer({
-
-                offerToReceiveAudio: true
-
-            });
+            await pc.createAnswer();
 
 
         await pc.setLocalDescription(
@@ -846,6 +888,10 @@ async function handleWebRTCOffer(
         );
 
 
+        // ======================================
+        // KIRIM SDP DALAM OBJECT BIASA
+        // ======================================
+
         window.socket.emit(
             'webrtc-answer',
             {
@@ -853,8 +899,15 @@ async function handleWebRTCOffer(
                 target:
                     callerId,
 
-                sdp:
-                    pc.localDescription
+                sdp: {
+
+                    type:
+                        pc.localDescription.type,
+
+                    sdp:
+                        pc.localDescription.sdp
+
+                }
 
             }
         );
@@ -863,7 +916,7 @@ async function handleWebRTCOffer(
     } catch (error) {
 
         console.error(
-            'Error handling WebRTC offer:',
+            '❌ Error handling WebRTC offer:',
             error
         );
 
