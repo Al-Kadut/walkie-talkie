@@ -14,23 +14,105 @@ import {
     onDisconnect
 } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-database.js";
 
-import { database } from "./firebase.js";
+import {
+    database
+} from "./firebase.js";
 
 
 // ==========================================
-// SOCKET-LIKE OBJECT
+// SOCKET ID
 // ==========================================
 
 const socketId =
-    crypto.randomUUID ?
-        crypto.randomUUID() :
-        Math.random().toString(36).substring(2) + Date.now();
+    (
+        typeof crypto !== 'undefined' &&
+        typeof crypto.randomUUID === 'function'
+    )
+        ? crypto.randomUUID()
+        : Math.random()
+            .toString(36)
+            .substring(2) +
+        Date.now();
+
+
+// ==========================================
+// STATE
+// ==========================================
 
 let currentChannel = null;
 let currentUsername = null;
 
 const eventHandlers = {};
-const listeners = [];
+
+const firebaseUnsubscribers = [];
+
+
+// ==========================================
+// EVENT SYSTEM
+// ==========================================
+
+function on(event, callback) {
+
+    if (!eventHandlers[event]) {
+        eventHandlers[event] = [];
+    }
+
+    eventHandlers[event].push(callback);
+
+}
+
+
+function once(event, callback) {
+
+    const wrapper = (...args) => {
+
+        callback(...args);
+
+        const handlers =
+            eventHandlers[event] || [];
+
+        const index =
+            handlers.indexOf(wrapper);
+
+        if (index !== -1) {
+            handlers.splice(index, 1);
+        }
+
+    };
+
+    on(event, wrapper);
+
+}
+
+
+function trigger(event, data) {
+
+    const handlers =
+        eventHandlers[event] || [];
+
+    handlers.forEach(
+        callback => {
+
+            try {
+                callback(data);
+            } catch (error) {
+
+                console.error(
+                    `Event ${event} error:`,
+                    error
+                );
+
+            }
+
+        }
+    );
+
+}
+
+
+// ==========================================
+// SOCKET OBJECT
+// ==========================================
 
 window.socket = {
 
@@ -38,367 +120,409 @@ window.socket = {
 
     connected: true,
 
-    on(event, callback) {
-        if (!eventHandlers[event]) {
-            eventHandlers[event] = [];
-        }
 
-        eventHandlers[event].push(callback);
+    on(event, callback) {
+
+        on(event, callback);
+
     },
+
 
     once(event, callback) {
-        const wrapper = (...args) => {
-            callback(...args);
 
-            const handlers = eventHandlers[event] || [];
-            const index = handlers.indexOf(wrapper);
+        once(event, callback);
 
-            if (index !== -1) {
-                handlers.splice(index, 1);
-            }
-        };
-
-        this.on(event, wrapper);
     },
+
 
     emit(event, data, callback) {
 
-        // ==========================================
-        // JOIN CHANNEL
-        // ==========================================
+        // ======================================
+        // JOIN
+        // ======================================
 
         if (event === 'join-channel') {
-            joinChannel(data, callback);
+
+            joinChannel(
+                data,
+                callback
+            );
+
             return;
         }
 
 
-        // ==========================================
-        // LEAVE CHANNEL
-        // ==========================================
+        // ======================================
+        // LEAVE
+        // ======================================
 
         if (event === 'leave-channel') {
+
             leaveChannel();
+
             return;
         }
 
 
-        // ==========================================
+        // ======================================
+        // REQUEST SPEAKING
+        // ======================================
+
+        if (event === 'request-speaking') {
+
+            requestSpeaking(
+                callback
+            );
+
+            return;
+        }
+
+
+        // ======================================
+        // RELEASE SPEAKING
+        // ======================================
+
+        if (event === 'release-speaking') {
+
+            releaseSpeaking();
+
+            return;
+        }
+
+
+        // ======================================
         // WEBRTC OFFER
-        // ==========================================
+        // ======================================
 
         if (event === 'webrtc-offer') {
+
+            const target =
+                data?.callee ||
+                data?.target ||
+                data?.receiver;
+
             sendSignal(
-                data.callee,
+                target,
                 'offer',
                 {
                     caller: socketId,
                     sdp: data.sdp
                 }
             );
+
             return;
         }
 
 
-        // ==========================================
+        // ======================================
         // WEBRTC ANSWER
-        // ==========================================
+        // ======================================
 
         if (event === 'webrtc-answer') {
+
+            const target =
+                data?.caller ||
+                data?.target ||
+                data?.receiver ||
+                data?.callee;
+
             sendSignal(
-                data.caller,
+                target,
                 'answer',
                 {
                     callee: socketId,
                     sdp: data.sdp
                 }
             );
+
             return;
         }
 
 
-        // ==========================================
-        // ICE CANDIDATE
-        // ==========================================
+        // ======================================
+        // ICE
+        // ======================================
 
         if (event === 'webrtc-ice-candidate') {
+
+            const target =
+                data?.target ||
+                data?.callee ||
+                data?.receiver ||
+                data?.caller;
+
             sendSignal(
-                data.target,
+                target,
                 'ice',
                 {
                     sender: socketId,
-                    candidate: data.candidate
+                    candidate:
+                        data.candidate
                 }
             );
+
             return;
         }
 
-
-        // ==========================================
-        // SPEAKING START
-        // ==========================================
-
-        if (event === 'speaking-start') {
-            startSpeaking();
-            return;
-        }
-
-
-        // ==========================================
-        // SPEAKING STOP
-        // ==========================================
-
-        if (event === 'speaking-stop') {
-            stopSpeaking();
-            return;
-        }
     },
 
+
     connect() {
+
         this.connected = true;
 
         trigger('connect');
+
     },
 
+
     disconnect() {
+
         leaveChannel();
 
         this.connected = false;
 
         trigger('disconnect');
+
     }
+
 };
-
-
-// ==========================================
-// TRIGGER EVENT
-// ==========================================
-
-function trigger(event, data) {
-
-    const handlers = eventHandlers[event];
-
-    if (!handlers) return;
-
-    handlers.forEach(callback => {
-
-        try {
-            callback(data);
-        } catch (error) {
-            console.error(`Error event ${event}:`, error);
-        }
-
-    });
-}
 
 
 // ==========================================
 // JOIN CHANNEL
 // ==========================================
 
-async function joinChannel(data, callback) {
+async function joinChannel(
+    data,
+    callback
+) {
 
     try {
 
-        currentChannel = data.channelCode;
-        currentUsername = data.username;
+        currentChannel =
+            data.channelCode;
 
-        const channelRef = ref(
-            database,
-            `rooms/${currentChannel}`
-        );
-
-        const userRef = ref(
-            database,
-            `rooms/${currentChannel}/users/${socketId}`
-        );
+        currentUsername =
+            data.username;
 
 
-        // ==========================================
-        // SIMPAN USER
-        // ==========================================
-
-        await set(userRef, {
-
-            socketId: socketId,
-
-            username: currentUsername,
-
-            joinedAt: Date.now()
-
-        });
-
-
-        // ==========================================
-        // HAPUS OTOMATIS SAAT KELUAR
-        // ==========================================
-
-        onDisconnect(userRef).remove();
-
-
-        // ==========================================
-        // LIST USER
-        // ==========================================
-
-        const usersRef = ref(
-            database,
-            `rooms/${currentChannel}/users`
-        );
-
-
-        const usersSnapshot = await new Promise(resolve => {
-
-            onValue(
-                usersRef,
-                snapshot => resolve(snapshot),
-                {
-                    onlyOnce: true
-                }
+        const usersRef =
+            ref(
+                database,
+                `rooms/${currentChannel}/users`
             );
 
-        });
+
+        const userRef =
+            ref(
+                database,
+                `rooms/${currentChannel}/users/${socketId}`
+            );
+
+
+        // ======================================
+        // USER DATA
+        // ======================================
+
+        await set(
+            userRef,
+            {
+                socketId: socketId,
+                username: currentUsername,
+                joinedAt: Date.now()
+            }
+        );
+
+
+        // ======================================
+        // AUTO DELETE WHEN DISCONNECTED
+        // ======================================
+
+        await onDisconnect(
+            userRef
+        ).remove();
+
+
+        // ======================================
+        // GET USERS
+        // ======================================
+
+        const snapshot =
+            await getOnce(usersRef);
 
 
         const users = [];
 
-        usersSnapshot.forEach(child => {
+        snapshot.forEach(
+            child => {
 
-            users.push({
+                const user =
+                    child.val();
 
-                socketId: child.key,
+                if (!user) {
+                    return;
+                }
 
-                username: child.val().username
+                users.push({
 
-            });
+                    socketId:
+                        child.key,
 
-        });
-
-
-        // ==========================================
-        // MONITOR USER BARU
-        // ==========================================
-
-        const joinedListener = onChildAdded(
-            usersRef,
-            snapshot => {
-
-                const user = snapshot.val();
-
-                if (!user) return;
-
-                if (snapshot.key === socketId) return;
-
-                addUserToList({
-
-                    socketId: snapshot.key,
-
-                    username: user.username
+                    username:
+                        user.username
 
                 });
 
-                if (
-                    typeof window.createPeerConnection === 'function'
-                ) {
-
-                    window.createPeerConnection(
-                        snapshot.key,
-                        true
-                    );
-
-                }
-
             }
         );
 
-        listeners.push(joinedListener);
 
+        // ======================================
+        // USER JOINED
+        // ======================================
 
-        // ==========================================
-        // MONITOR USER KELUAR
-        // ==========================================
+        const unsubscribeAdded =
+            onChildAdded(
+                usersRef,
+                snapshot => {
 
-        const leftListener = onChildRemoved(
-            usersRef,
-            snapshot => {
-
-                const socketIdLeft = snapshot.key;
-
-                removeUserFromList(socketIdLeft);
-
-                if (
-                    typeof window.closePeerConnection === 'function'
-                ) {
-
-                    window.closePeerConnection(
-                        socketIdLeft
-                    );
-
-                }
-
-                trigger(
-                    'user-left',
-                    {
-                        socketId: socketIdLeft
+                    if (
+                        snapshot.key ===
+                        socketId
+                    ) {
+                        return;
                     }
-                );
 
-            }
+
+                    const user =
+                        snapshot.val();
+
+                    if (!user) {
+                        return;
+                    }
+
+
+                    const userData = {
+
+                        socketId:
+                            snapshot.key,
+
+                        username:
+                            user.username
+
+                    };
+
+
+                    if (
+                        typeof window.uiAddUser ===
+                        'function'
+                    ) {
+
+                        window.uiAddUser(
+                            userData
+                        );
+
+                    }
+
+
+                    if (
+                        typeof window.createPeerConnection ===
+                        'function'
+                    ) {
+
+                        window.createPeerConnection(
+                            snapshot.key,
+                            true
+                        );
+
+                    }
+
+
+                    trigger(
+                        'user-joined',
+                        userData
+                    );
+
+                }
+            );
+
+
+        firebaseUnsubscribers.push(
+            unsubscribeAdded
         );
 
-        listeners.push(leftListener);
+
+        // ======================================
+        // USER LEFT
+        // ======================================
+
+        const unsubscribeRemoved =
+            onChildRemoved(
+                usersRef,
+                snapshot => {
+
+                    const leftId =
+                        snapshot.key;
 
 
-        // ==========================================
-        // MONITOR SIGNAL WEBRTC
-        // ==========================================
+                    if (
+                        typeof window.uiRemoveUser ===
+                        'function'
+                    ) {
+
+                        window.uiRemoveUser(
+                            leftId
+                        );
+
+                    }
+
+
+                    if (
+                        typeof window.closePeerConnection ===
+                        'function'
+                    ) {
+
+                        window.closePeerConnection(
+                            leftId
+                        );
+
+                    }
+
+
+                    trigger(
+                        'user-left',
+                        {
+                            socketId: leftId
+                        }
+                    );
+
+                }
+            );
+
+
+        firebaseUnsubscribers.push(
+            unsubscribeRemoved
+        );
+
+
+        // ======================================
+        // WEBRTC SIGNALS
+        // ======================================
 
         listenSignals();
 
 
-        // ==========================================
-        // MONITOR SPEAKER
-        // ==========================================
+        // ======================================
+        // SPEAKER
+        // ======================================
 
         listenSpeaker();
 
 
-        // ==========================================
-        // TAMPILKAN USER YANG SUDAH ADA
-        // ==========================================
-
-        users.forEach(user => {
-
-            if (user.socketId === socketId) return;
-
-            addUserToList(user);
-
-        });
-
-
-        // ==========================================
-        // CALLBACK BERHASIL
-        // ==========================================
-
-        if (callback) {
-
-            callback({
-
-                success: true,
-
-                users: users,
-
-                currentUser: {
-
-                    socketId: socketId,
-
-                    username: currentUsername
-
-                }
-
-            });
-
-        }
-
+        // ======================================
+        // CONNECTION
+        // ======================================
 
         updateConnectionStatus(
             'Connected',
@@ -411,6 +535,33 @@ async function joinChannel(data, callback) {
             socketId
         );
 
+
+        // ======================================
+        // CALLBACK
+        // ======================================
+
+        if (callback) {
+
+            callback({
+
+                success: true,
+
+                users: users,
+
+                currentUser: {
+
+                    socketId:
+                        socketId,
+
+                    username:
+                        currentUsername
+
+                }
+
+            });
+
+        }
+
     } catch (error) {
 
         console.error(
@@ -418,285 +569,561 @@ async function joinChannel(data, callback) {
             error
         );
 
+
         if (callback) {
 
             callback({
 
                 success: false,
 
-                message: error.message
+                message:
+                    error.message
 
             });
 
         }
 
     }
+
 }
 
 
 // ==========================================
-// WEBRTC SIGNALING
+// GET ONCE
 // ==========================================
 
-function sendSignal(targetId, type, data) {
+function getOnce(databaseRef) {
 
-    if (!currentChannel || !targetId) return;
+    return new Promise(
+        resolve => {
 
-    const signalRef = ref(
-        database,
-        `rooms/${currentChannel}/signals/${targetId}`
-    );
+            onValue(
+                databaseRef,
+                snapshot => {
 
-    const newSignal = push(signalRef);
+                    resolve(snapshot);
 
-    set(newSignal, {
-
-        type: type,
-
-        data: data,
-
-        sender: socketId,
-
-        createdAt: Date.now()
-
-    }).catch(error => {
-
-        console.error(
-            'Gagal mengirim signal:',
-            error
-        );
-
-    });
-}
-
-
-// ==========================================
-// LISTEN SIGNAL
-// ==========================================
-
-function listenSignals() {
-
-    if (!currentChannel) return;
-
-    const signalsRef = ref(
-        database,
-        `rooms/${currentChannel}/signals/${socketId}`
-    );
-
-
-    const signalListener = onChildAdded(
-        signalsRef,
-        async snapshot => {
-
-            const signal = snapshot.val();
-
-            if (!signal) return;
-
-
-            if (signal.type === 'offer') {
-
-                if (
-                    typeof window.handleWebRTCOffer === 'function'
-                ) {
-
-                    window.handleWebRTCOffer(
-
-                        signal.data.caller,
-
-                        signal.data.sdp
-
-                    );
-
+                },
+                {
+                    onlyOnce: true
                 }
-
-            }
-
-
-            if (signal.type === 'answer') {
-
-                if (
-                    typeof window.handleWebRTCAnswer === 'function'
-                ) {
-
-                    window.handleWebRTCAnswer(
-
-                        signal.data.callee,
-
-                        signal.data.sdp
-
-                    );
-
-                }
-
-            }
-
-
-            if (signal.type === 'ice') {
-
-                if (
-                    typeof window.handleNewICECandidate === 'function'
-                ) {
-
-                    window.handleNewICECandidate(
-
-                        signal.data.sender,
-
-                        signal.data.candidate
-
-                    );
-
-                }
-
-            }
-
-
-            // Hapus signal setelah diproses
-
-            await remove(snapshot.ref);
-
-        }
-    );
-
-    listeners.push(signalListener);
-}
-
-
-// ==========================================
-// SPEAKING
-// ==========================================
-
-function listenSpeaker() {
-
-    if (!currentChannel) return;
-
-    const speakerRef = ref(
-        database,
-        `rooms/${currentChannel}/speaking`
-    );
-
-
-    const speakerListener = onValue(
-        speakerRef,
-        snapshot => {
-
-            const speaker = snapshot.val();
-
-            if (!speaker) {
-
-                trigger(
-                    'speaking-stop',
-                    {
-                        socketId: null
-                    }
-                );
-
-                clearSpeaker(null);
-
-                return;
-
-            }
-
-
-            if (speaker.socketId === socketId) return;
-
-
-            setSpeaker(
-                speaker.socketId,
-                speaker.username
             );
 
         }
     );
 
-    listeners.push(speakerListener);
 }
 
 
 // ==========================================
-// START SPEAKING
+// WEBRTC SIGNAL
 // ==========================================
 
-async function startSpeaking() {
-
-    if (!currentChannel) return;
-
-    const speakerRef = ref(
-        database,
-        `rooms/${currentChannel}/speaking`
-    );
-
-
-    const result = await runTransaction(
-        speakerRef,
-        currentSpeaker => {
-
-            if (currentSpeaker === null) {
-
-                return {
-
-                    socketId: socketId,
-
-                    username: currentUsername
-
-                };
-
-            }
-
-            return;
-
-        }
-    );
-
-
-    if (!result.committed) {
-
-        console.log(
-            'Channel sedang digunakan orang lain.'
-        );
-
-    }
-
-}
-
-
-// ==========================================
-// STOP SPEAKING
-// ==========================================
-
-async function stopSpeaking() {
-
-    if (!currentChannel) return;
-
-    const speakerRef = ref(
-        database,
-        `rooms/${currentChannel}/speaking`
-    );
-
-
-    const snapshot = await new Promise(resolve => {
-
-        onValue(
-            speakerRef,
-            snap => resolve(snap),
-            {
-                onlyOnce: true
-            }
-        );
-
-    });
-
-
-    const speaker = snapshot.val();
-
+async function sendSignal(
+    targetId,
+    type,
+    data
+) {
 
     if (
-        speaker &&
-        speaker.socketId === socketId
+        !currentChannel ||
+        !targetId
     ) {
+        return;
+    }
 
-        await remove(speakerRef);
+
+    const signalRef =
+        ref(
+            database,
+            `rooms/${currentChannel}/signals/${targetId}`
+        );
+
+
+    const newSignal =
+        push(signalRef);
+
+
+    try {
+
+        await set(
+            newSignal,
+            {
+
+                type: type,
+
+                data: data,
+
+                sender: socketId,
+
+                createdAt:
+                    Date.now()
+
+            }
+        );
+
+    } catch (error) {
+
+        console.error(
+            'Gagal mengirim WebRTC signal:',
+            error
+        );
 
     }
+
+}
+
+
+// ==========================================
+// LISTEN SIGNALS
+// ==========================================
+
+function listenSignals() {
+
+    if (!currentChannel) {
+        return;
+    }
+
+
+    const signalsRef =
+        ref(
+            database,
+            `rooms/${currentChannel}/signals/${socketId}`
+        );
+
+
+    const unsubscribe =
+        onChildAdded(
+            signalsRef,
+            async snapshot => {
+
+                const signal =
+                    snapshot.val();
+
+                if (!signal) {
+                    return;
+                }
+
+
+                try {
+
+                    // ==========================
+                    // OFFER
+                    // ==========================
+
+                    if (
+                        signal.type ===
+                        'offer'
+                    ) {
+
+                        if (
+                            typeof window.handleWebRTCOffer ===
+                            'function'
+                        ) {
+
+                            window.handleWebRTCOffer(
+
+                                signal.data.caller,
+
+                                signal.data.sdp
+
+                            );
+
+                        }
+
+                    }
+
+
+                    // ==========================
+                    // ANSWER
+                    // ==========================
+
+                    if (
+                        signal.type ===
+                        'answer'
+                    ) {
+
+                        if (
+                            typeof window.handleWebRTCAnswer ===
+                            'function'
+                        ) {
+
+                            window.handleWebRTCAnswer(
+
+                                signal.data.callee,
+
+                                signal.data.sdp
+
+                            );
+
+                        }
+
+                    }
+
+
+                    // ==========================
+                    // ICE
+                    // ==========================
+
+                    if (
+                        signal.type ===
+                        'ice'
+                    ) {
+
+                        if (
+                            typeof window.handleNewICECandidate ===
+                            'function'
+                        ) {
+
+                            window.handleNewICECandidate(
+
+                                signal.data.sender,
+
+                                signal.data.candidate
+
+                            );
+
+                        }
+
+                    }
+
+
+                } catch (error) {
+
+                    console.error(
+                        'Signal processing error:',
+                        error
+                    );
+
+                }
+
+
+                // ======================================
+                // DELETE AFTER PROCESSING
+                // ======================================
+
+                try {
+
+                    await remove(
+                        snapshot.ref
+                    );
+
+                } catch (error) {
+
+                    console.error(
+                        'Signal delete error:',
+                        error
+                    );
+
+                }
+
+            }
+        );
+
+
+    firebaseUnsubscribers.push(
+        unsubscribe
+    );
+
+}
+
+
+// ==========================================
+// REQUEST SPEAKING
+// ==========================================
+
+async function requestSpeaking(
+    callback
+) {
+
+    if (!currentChannel) {
+
+        if (callback) {
+
+            callback({
+                success: false,
+                message:
+                    'Belum masuk channel.'
+            });
+
+        }
+
+        return;
+    }
+
+
+    const speakerRef =
+        ref(
+            database,
+            `rooms/${currentChannel}/speaking`
+        );
+
+
+    try {
+
+        const result =
+            await runTransaction(
+                speakerRef,
+                currentSpeaker => {
+
+                    // ==============================
+                    // CHANNEL KOSONG
+                    // ==============================
+
+                    if (
+                        currentSpeaker ===
+                        null
+                    ) {
+
+                        return {
+
+                            socketId:
+                                socketId,
+
+                            username:
+                                currentUsername,
+
+                            startedAt:
+                                Date.now()
+
+                        };
+
+                    }
+
+
+                    // ==============================
+                    // SUDAH DIPAKAI SENDIRI
+                    // ==============================
+
+                    if (
+                        currentSpeaker &&
+                        currentSpeaker.socketId ===
+                        socketId
+                    ) {
+
+                        return currentSpeaker;
+
+                    }
+
+
+                    // ==============================
+                    // DIBATALKAN
+                    // ==============================
+
+                    return;
+
+                }
+            );
+
+
+        const success =
+            result.committed &&
+            result.snapshot.exists() &&
+            result.snapshot.val()?.socketId ===
+            socketId;
+
+
+        if (callback) {
+
+            callback({
+
+                success: success
+
+            });
+
+        }
+
+    } catch (error) {
+
+        console.error(
+            'Request speaking error:',
+            error
+        );
+
+
+        if (callback) {
+
+            callback({
+
+                success: false,
+
+                message:
+                    error.message
+
+            });
+
+        }
+
+    }
+
+}
+
+
+// ==========================================
+// RELEASE SPEAKING
+// ==========================================
+
+async function releaseSpeaking() {
+
+    if (!currentChannel) {
+        return;
+    }
+
+
+    const speakerRef =
+        ref(
+            database,
+            `rooms/${currentChannel}/speaking`
+        );
+
+
+    try {
+
+        const snapshot =
+            await getOnce(
+                speakerRef
+            );
+
+
+        const speaker =
+            snapshot.val();
+
+
+        if (
+            speaker &&
+            speaker.socketId ===
+            socketId
+        ) {
+
+            await remove(
+                speakerRef
+            );
+
+        }
+
+    } catch (error) {
+
+        console.error(
+            'Release speaking error:',
+            error
+        );
+
+    }
+
+}
+
+
+// ==========================================
+// LISTEN SPEAKER
+// ==========================================
+
+function listenSpeaker() {
+
+    if (!currentChannel) {
+        return;
+    }
+
+
+    const speakerRef =
+        ref(
+            database,
+            `rooms/${currentChannel}/speaking`
+        );
+
+
+    const unsubscribe =
+        onValue(
+            speakerRef,
+            snapshot => {
+
+                const speaker =
+                    snapshot.val();
+
+
+                // ==========================
+                // NO SPEAKER
+                // ==========================
+
+                if (!speaker) {
+
+                    if (
+                        typeof window.uiClearSpeaker ===
+                        'function'
+                    ) {
+
+                        window.uiClearSpeaker(
+                            null
+                        );
+
+                    }
+
+
+                    trigger(
+                        'speaking-stop',
+                        {
+                            socketId: null
+                        }
+                    );
+
+                    return;
+
+                }
+
+
+                // ==========================
+                // MYSELF
+                // ==========================
+
+                if (
+                    speaker.socketId ===
+                    socketId
+                ) {
+
+                    return;
+
+                }
+
+
+                // ==========================
+                // OTHER USER
+                // ==========================
+
+                if (
+                    typeof window.uiSetSpeaker ===
+                    'function'
+                ) {
+
+                    window.uiSetSpeaker(
+
+                        speaker.socketId,
+
+                        speaker.username
+
+                    );
+
+                }
+
+
+                trigger(
+                    'speaking-start',
+                    {
+
+                        socketId:
+                            speaker.socketId,
+
+                        username:
+                            speaker.username
+
+                    }
+                );
+
+            }
+        );
+
+
+    firebaseUnsubscribers.push(
+        unsubscribe
+    );
 
 }
 
@@ -707,50 +1134,60 @@ async function stopSpeaking() {
 
 async function leaveChannel() {
 
-    if (!currentChannel) return;
+    if (!currentChannel) {
+        return;
+    }
+
+
+    const channel =
+        currentChannel;
+
+
+    currentChannel = null;
 
 
     try {
 
-        const userRef = ref(
-            database,
-            `rooms/${currentChannel}/users/${socketId}`
-        );
-
-        await remove(userRef);
-
-
-        const speakerRef = ref(
-            database,
-            `rooms/${currentChannel}/speaking`
-        );
-
-
-        const speakerSnapshot = await new Promise(resolve => {
-
-            onValue(
-                speakerRef,
-                snap => resolve(snap),
-                {
-                    onlyOnce: true
-                }
+        const userRef =
+            ref(
+                database,
+                `rooms/${channel}/users/${socketId}`
             );
 
-        });
+
+        await remove(
+            userRef
+        );
 
 
-        const speaker = speakerSnapshot.val();
+        const speakerRef =
+            ref(
+                database,
+                `rooms/${channel}/speaking`
+            );
+
+
+        const speakerSnapshot =
+            await getOnce(
+                speakerRef
+            );
+
+
+        const speaker =
+            speakerSnapshot.val();
 
 
         if (
             speaker &&
-            speaker.socketId === socketId
+            speaker.socketId ===
+            socketId
         ) {
 
-            await remove(speakerRef);
+            await remove(
+                speakerRef
+            );
 
         }
-
 
     } catch (error) {
 
@@ -762,37 +1199,45 @@ async function leaveChannel() {
     }
 
 
-    listeners.forEach(unsubscribe => {
+    firebaseUnsubscribers.forEach(
+        unsubscribe => {
 
-        try {
+            try {
 
-            unsubscribe();
+                unsubscribe();
 
-        } catch (error) {
+            } catch (error) {
 
-            console.error(error);
+                console.warn(
+                    'Unsubscribe error:',
+                    error
+                );
+
+            }
 
         }
+    );
 
-    });
 
-
-    listeners.length = 0;
-
-    currentChannel = null;
+    firebaseUnsubscribers.length = 0;
 
     currentUsername = null;
+
 }
 
 
 // ==========================================
-// UI HELPERS
+// UI CONNECTION
 // ==========================================
 
-function updateConnectionStatus(text, color) {
+function updateConnectionStatus(
+    text,
+    color
+) {
 
     if (
-        typeof window.updateUIConnectionStatus === 'function'
+        typeof window.updateUIConnectionStatus ===
+        'function'
     ) {
 
         window.updateUIConnectionStatus(
@@ -805,63 +1250,13 @@ function updateConnectionStatus(text, color) {
 }
 
 
-function addUserToList(user) {
-
-    if (
-        typeof window.uiAddUser === 'function'
-    ) {
-
-        window.uiAddUser(user);
-
-    }
-
-}
-
-
-function removeUserFromList(socketId) {
-
-    if (
-        typeof window.uiRemoveUser === 'function'
-    ) {
-
-        window.uiRemoveUser(socketId);
-
-    }
-
-}
-
-
-function setSpeaker(socketId, username) {
-
-    if (
-        typeof window.uiSetSpeaker === 'function'
-    ) {
-
-        window.uiSetSpeaker(
-            socketId,
-            username
-        );
-
-    }
-
-}
-
-
-function clearSpeaker(socketId) {
-
-    if (
-        typeof window.uiClearSpeaker === 'function'
-    ) {
-
-        window.uiClearSpeaker(socketId);
-
-    }
-
-}
-
-
 // ==========================================
-// FIREBASE CONNECTION READY
+// START
 // ==========================================
 
 window.socket.connect();
+
+console.log(
+    'Firebase socket adapter loaded:',
+    socketId
+);

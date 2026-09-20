@@ -1,5 +1,6 @@
 // ==========================================
-// UI ELEMENTS
+// WALKIE TALKIE - MAIN.JS
+// Firebase + WebRTC
 // ==========================================
 
 const views = {
@@ -14,53 +15,34 @@ const inputs = {
 };
 
 const pttButton = document.getElementById('ptt-button');
-const currentSpeakerDisplay = document.getElementById('current-speaker-display');
-const micPermissionBox = document.getElementById('mic-permission-box');
+const currentSpeakerDisplay =
+    document.getElementById('current-speaker-display');
 
-
-// ==========================================
-// STATE
-// ==========================================
+const micPermissionBox =
+    document.getElementById('mic-permission-box');
 
 let currentChannelCode = '';
 let currentUser = null;
+
 let appMode = 'ptt';
 let isSpeaking = false;
 let isChannelBusy = false;
+
 let usersList = [];
 
 
 // ==========================================
-// INIT ROUTING BASED ON URL
-// ==========================================
-
-function checkUrlRouting() {
-
-    const path = window.location.pathname;
-
-    if (path.startsWith('/join/')) {
-
-        const code = path.split('/join/')[1];
-
-        if (code) {
-
-            inputs.channel.value = code.toUpperCase();
-
-            switchView('join');
-
-        }
-    }
-}
-
-
-// ==========================================
-// VIEW MANAGEMENT
+// VIEW
 // ==========================================
 
 function switchView(viewName) {
 
     Object.values(views).forEach(view => {
-        view.classList.remove('active');
+
+        if (view) {
+            view.classList.remove('active');
+        }
+
     });
 
     if (views[viewName]) {
@@ -70,34 +52,72 @@ function switchView(viewName) {
 
 
 // ==========================================
+// URL ROUTING
+// ==========================================
+
+function checkUrlRouting() {
+
+    const path = window.location.pathname;
+
+    if (path.startsWith('/join/')) {
+
+        const code = path
+            .split('/join/')[1]
+            ?.split('/')[0];
+
+        if (code && inputs.channel) {
+
+            inputs.channel.value =
+                decodeURIComponent(code).toUpperCase();
+
+            switchView('join');
+        }
+    }
+}
+
+
+// ==========================================
 // NAVIGATION
 // ==========================================
 
-document
-    .getElementById('btn-goto-join')
-    .addEventListener('click', () => {
+const btnGotoJoin =
+    document.getElementById('btn-goto-join');
+
+if (btnGotoJoin) {
+
+    btnGotoJoin.addEventListener('click', () => {
 
         switchView('join');
 
     });
 
+}
 
-document
-    .getElementById('btn-back-landing')
-    .addEventListener('click', () => {
+
+const btnBackLanding =
+    document.getElementById('btn-back-landing');
+
+if (btnBackLanding) {
+
+    btnBackLanding.addEventListener('click', () => {
 
         switchView('landing');
 
     });
+
+}
 
 
 // ==========================================
 // CREATE CHANNEL
 // ==========================================
 
-document
-    .getElementById('btn-create-channel')
-    .addEventListener('click', () => {
+const btnCreateChannel =
+    document.getElementById('btn-create-channel');
+
+if (btnCreateChannel) {
+
+    btnCreateChannel.addEventListener('click', () => {
 
         const chars =
             'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -107,7 +127,9 @@ document
         for (let i = 0; i < 6; i++) {
 
             code += chars.charAt(
-                Math.floor(Math.random() * chars.length)
+                Math.floor(
+                    Math.random() * chars.length
+                )
             );
 
         }
@@ -117,135 +139,160 @@ document
         switchView('join');
 
         showNotification(
-            'Channel ' + code + ' dibuat!'
+            `Channel ${code} dibuat!`
         );
 
     });
 
+}
+
 
 // ==========================================
-// JOIN CHANNEL LOGIC
+// JOIN CHANNEL
 // ==========================================
 
-document
-    .getElementById('btn-join-channel')
-    .addEventListener('click', async () => {
+const btnJoinChannel =
+    document.getElementById('btn-join-channel');
 
-        const channel =
-            inputs.channel.value
-                .trim()
-                .toUpperCase();
+if (btnJoinChannel) {
 
-        const username =
-            inputs.username.value.trim();
+    btnJoinChannel.addEventListener(
+        'click',
+        async () => {
 
+            const channel =
+                inputs.channel.value
+                    .trim()
+                    .toUpperCase();
 
-        // Validasi
-        if (!channel || !username) {
-
-            showNotification(
-                'Kode Channel dan Nama harus diisi!'
-            );
-
-            return;
-        }
+            const username =
+                inputs.username.value.trim();
 
 
-        const btn =
-            document.getElementById('btn-join-channel');
+            if (!channel || !username) {
+
+                showNotification(
+                    'Kode Channel dan Nama harus diisi!'
+                );
+
+                return;
+            }
 
 
-        btn.disabled = true;
+            btnJoinChannel.disabled = true;
 
-        btn.textContent =
-            'MENGHUBUNGKAN...';
-
-
-        // ==========================================
-        // REQUEST MICROPHONE
-        // ==========================================
-
-        const micGranted =
-            await window.initLocalAudio();
+            btnJoinChannel.textContent =
+                'MENGHUBUNGKAN...';
 
 
-        if (!micGranted) {
+            // ==========================================
+            // MICROPHONE
+            // ==========================================
 
-            micPermissionBox.style.display =
-                'block';
+            try {
 
-            btn.disabled = false;
+                const micGranted =
+                    await window.initLocalAudio();
 
-            btn.textContent =
-                '🎙️ GABUNG CHANNEL';
+                if (!micGranted) {
 
-            return;
-        }
+                    if (micPermissionBox) {
+                        micPermissionBox.style.display =
+                            'block';
+                    }
 
+                    btnJoinChannel.disabled = false;
 
-        micPermissionBox.style.display =
-            'none';
-
-
-        // ==========================================
-        // CHECK SOCKET
-        // ==========================================
-
-        if (!window.socket) {
-
-            console.error(
-                'Socket.IO belum siap.'
-            );
-
-            showNotification(
-                'Koneksi server belum siap. Silakan refresh halaman.'
-            );
-
-            btn.disabled = false;
-
-            btn.textContent =
-                '🎙️ GABUNG CHANNEL';
-
-            return;
-        }
-
-
-        // ==========================================
-        // CONNECT SOCKET
-        // ==========================================
-
-        if (!window.socket.connected) {
-
-            window.socket.connect();
-
-        }
-
-
-        // ==========================================
-        // JOIN CHANNEL
-        // ==========================================
-
-        const joinChannel = () => {
-
-            window.socket.emit(
-                'join-channel',
-                {
-                    channelCode: channel,
-                    username: username
-                },
-                (res) => {
-
-                    btn.disabled = false;
-
-                    btn.textContent =
+                    btnJoinChannel.textContent =
                         '🎙️ GABUNG CHANNEL';
 
+                    return;
+                }
 
-                    // ==========================================
-                    // SUCCESS
-                    // ==========================================
+            } catch (error) {
 
-                    if (res && res.success) {
+                console.error(
+                    'Microphone error:',
+                    error
+                );
+
+                showNotification(
+                    'Microphone tidak dapat digunakan.'
+                );
+
+                btnJoinChannel.disabled = false;
+
+                btnJoinChannel.textContent =
+                    '🎙️ GABUNG CHANNEL';
+
+                return;
+            }
+
+
+            if (micPermissionBox) {
+                micPermissionBox.style.display =
+                    'none';
+            }
+
+
+            // ==========================================
+            // FIREBASE SOCKET
+            // ==========================================
+
+            if (!window.socket) {
+
+                console.error(
+                    'Firebase socket belum siap.'
+                );
+
+                showNotification(
+                    'Koneksi belum siap. Refresh halaman.'
+                );
+
+                btnJoinChannel.disabled = false;
+
+                btnJoinChannel.textContent =
+                    '🎙️ GABUNG CHANNEL';
+
+                return;
+            }
+
+
+            if (!window.socket.connected) {
+                window.socket.connect();
+            }
+
+
+            const joinChannel = () => {
+
+                window.socket.emit(
+                    'join-channel',
+                    {
+                        channelCode: channel,
+                        username: username
+                    },
+                    (res) => {
+
+                        btnJoinChannel.disabled = false;
+
+                        btnJoinChannel.textContent =
+                            '🎙️ GABUNG CHANNEL';
+
+
+                        if (!res || !res.success) {
+
+                            showNotification(
+                                res?.message ||
+                                'Gagal bergabung ke channel.'
+                            );
+
+                            return;
+                        }
+
+
+                        // ==========================================
+                        // SAVE USER
+                        // ==========================================
 
                         currentChannelCode =
                             channel;
@@ -254,35 +301,52 @@ document
                             res.currentUser;
 
 
-                        // Channel display
-                        document
-                            .getElementById(
+                        // ==========================================
+                        // CHANNEL DISPLAY
+                        // ==========================================
+
+                        const channelDisplay =
+                            document.getElementById(
                                 'current-channel-display'
-                            )
-                            .textContent =
-                            channel;
+                            );
+
+                        if (channelDisplay) {
+                            channelDisplay.textContent =
+                                channel;
+                        }
 
 
-                        document
-                            .getElementById(
+                        const mobileChannelDisplay =
+                            document.getElementById(
                                 'mobile-channel-display'
-                            )
-                            .textContent =
-                            channel;
+                            );
+
+                        if (mobileChannelDisplay) {
+                            mobileChannelDisplay.textContent =
+                                channel;
+                        }
 
 
-                        // Clear user list
-                        document
-                            .getElementById(
+                        // ==========================================
+                        // RESET USERS
+                        // ==========================================
+
+                        const userList =
+                            document.getElementById(
                                 'user-list'
-                            )
-                            .innerHTML = '';
+                            );
 
+                        if (userList) {
+                            userList.innerHTML = '';
+                        }
 
                         usersList = [];
 
 
-                        // Add users
+                        // ==========================================
+                        // USERS
+                        // ==========================================
+
                         if (Array.isArray(res.users)) {
 
                             res.users.forEach(user => {
@@ -294,44 +358,22 @@ document
                         }
 
 
-                        // Current speaker
-                        if (res.currentSpeaker) {
+                        // ==========================================
+                        // SWITCH APP
+                        // ==========================================
 
-                            const speakerUser =
-                                res.users.find(
-                                    user =>
-                                        user.socketId ===
-                                        res.currentSpeaker
-                                );
-
-
-                            if (speakerUser) {
-
-                                uiSetSpeaker(
-                                    speakerUser.socketId,
-                                    speakerUser.username
-                                );
-
-                            }
-
-                        }
-
-
-                        // Switch to application
                         switchView('app');
 
-
                         showNotification(
-                            'Berhasil bergabung ke ' +
-                            channel
+                            `Berhasil bergabung ke ${channel}`
                         );
 
 
-                        // Handsfree mode
-                        if (
-                            appMode ===
-                            'handsfree'
-                        ) {
+                        // ==========================================
+                        // HANDSFREE
+                        // ==========================================
+
+                        if (appMode === 'handsfree') {
 
                             window.unmuteMic();
 
@@ -341,168 +383,21 @@ document
 
                         }
 
-                    } else {
-
-                        showNotification(
-                            'Gagal bergabung ke channel.'
-                        );
-
                     }
-
-                }
-            );
-
-        };
-
-
-        // ==========================================
-        // WAIT FOR SOCKET CONNECTION
-        // ==========================================
-
-        if (window.socket.connected) {
-
-            joinChannel();
-
-        } else {
-
-            window.socket.once(
-                'connect',
-                joinChannel
-            );
-
-        }
-
-    });
-
-
-// ==========================================
-// LEAVE CHANNEL
-// ==========================================
-
-document
-    .getElementById('btn-leave')
-    .addEventListener('click', () => {
-
-        if (window.socket) {
-
-            window.socket.emit(
-                'leave-channel'
-            );
-
-        }
-
-
-        if (
-            typeof window.closeAllPeerConnections ===
-            'function'
-        ) {
-
-            window.closeAllPeerConnections();
-
-        }
-
-
-        if (window.localStream) {
-
-            window.localStream
-                .getTracks()
-                .forEach(track => {
-                    track.stop();
-                });
-
-            window.localStream = null;
-
-        }
-
-
-        document
-            .getElementById('user-list')
-            .innerHTML = '';
-
-
-        currentChannelCode = '';
-
-        currentUser = null;
-
-        isChannelBusy = false;
-
-        isSpeaking = false;
-
-
-        currentSpeakerDisplay.textContent =
-            'READY';
-
-        currentSpeakerDisplay.style.color =
-            'var(--text-secondary)';
-
-
-        history.pushState(
-            null,
-            '',
-            '/'
-        );
-
-
-        switchView('landing');
-
-    });
-
-
-// ==========================================
-// PUSH TO TALK
-// ==========================================
-
-function startSpeaking() {
-
-    if (appMode === 'handsfree') {
-        return;
-    }
-
-
-    if (isChannelBusy) {
-
-        showNotification(
-            'Channel Sedang Digunakan'
-        );
-
-        return;
-    }
-
-
-    if (!window.socket) {
-
-        showNotification(
-            'Socket belum terhubung.'
-        );
-
-        return;
-    }
-
-
-    window.socket.emit(
-        'request-speaking',
-        (res) => {
-
-            if (res && res.success) {
-
-                isSpeaking = true;
-
-                window.unmuteMic();
-
-                pttButton.classList.add(
-                    'speaking'
                 );
 
-                currentSpeakerDisplay.textContent =
-                    'SEDANG BERBICARA';
+            };
 
-                currentSpeakerDisplay.style.color =
-                    'var(--color-green)';
+
+            if (window.socket.connected) {
+
+                joinChannel();
 
             } else {
 
-                showNotification(
-                    'Gagal menggunakan channel, sedang sibuk.'
+                window.socket.once(
+                    'connect',
+                    joinChannel
                 );
 
             }
@@ -513,33 +408,247 @@ function startSpeaking() {
 }
 
 
-function stopSpeaking() {
+// ==========================================
+// LEAVE CHANNEL
+// ==========================================
+
+const btnLeave =
+    document.getElementById('btn-leave');
+
+if (btnLeave) {
+
+    btnLeave.addEventListener(
+        'click',
+        async () => {
+
+            try {
+
+                if (isSpeaking) {
+                    stopSpeaking();
+                }
+
+                if (window.socket) {
+
+                    window.socket.emit(
+                        'leave-channel'
+                    );
+
+                }
+
+            } catch (error) {
+
+                console.error(
+                    'Leave error:',
+                    error
+                );
+
+            }
+
+
+            if (
+                typeof window.closeAllPeerConnections ===
+                'function'
+            ) {
+
+                window.closeAllPeerConnections();
+
+            }
+
+
+            if (window.localStream) {
+
+                window.localStream
+                    .getTracks()
+                    .forEach(track => {
+                        track.stop();
+                    });
+
+                window.localStream = null;
+
+            }
+
+
+            const userList =
+                document.getElementById('user-list');
+
+            if (userList) {
+                userList.innerHTML = '';
+            }
+
+
+            usersList = [];
+
+            currentChannelCode = '';
+
+            currentUser = null;
+
+            isChannelBusy = false;
+
+            isSpeaking = false;
+
+
+            if (currentSpeakerDisplay) {
+
+                currentSpeakerDisplay.textContent =
+                    'READY';
+
+                currentSpeakerDisplay.style.color =
+                    'var(--text-secondary)';
+
+            }
+
+
+            if (pttButton) {
+
+                pttButton.classList.remove(
+                    'speaking',
+                    'active'
+                );
+
+            }
+
+
+            history.pushState(
+                null,
+                '',
+                '/'
+            );
+
+            switchView('landing');
+
+        }
+    );
+
+}
+
+
+// ==========================================
+// PUSH TO TALK
+// ==========================================
+
+async function startSpeaking() {
+
+    if (isSpeaking) {
+        return;
+    }
+
 
     if (appMode === 'handsfree') {
         return;
     }
 
 
-    if (isSpeaking) {
+    if (!window.socket) {
 
-        isSpeaking = false;
+        showNotification(
+            'Koneksi belum tersedia.'
+        );
+
+        return;
+    }
+
+
+    // ==========================================
+    // REQUEST SPEAKER
+    // ==========================================
+
+    window.socket.emit(
+        'request-speaking',
+        (res) => {
+
+            if (res && res.success) {
+
+                isSpeaking = true;
+
+                isChannelBusy = true;
+
+
+                if (
+                    typeof window.unmuteMic ===
+                    'function'
+                ) {
+
+                    window.unmuteMic();
+
+                }
+
+
+                if (pttButton) {
+
+                    pttButton.classList.add(
+                        'speaking'
+                    );
+
+                }
+
+
+                if (currentSpeakerDisplay) {
+
+                    currentSpeakerDisplay.textContent =
+                        'SEDANG BERBICARA';
+
+                    currentSpeakerDisplay.style.color =
+                        'var(--color-green)';
+
+                }
+
+            } else {
+
+                showNotification(
+                    'Channel sedang digunakan orang lain.'
+                );
+
+            }
+
+        }
+    );
+
+}
+
+
+// ==========================================
+// STOP TALKING
+// ==========================================
+
+function stopSpeaking() {
+
+    if (!isSpeaking) {
+        return;
+    }
+
+
+    isSpeaking = false;
+
+
+    if (
+        typeof window.muteMic ===
+        'function'
+    ) {
 
         window.muteMic();
 
+    }
 
-        if (window.socket) {
 
-            window.socket.emit(
-                'release-speaking'
-            );
+    if (window.socket) {
 
-        }
+        window.socket.emit(
+            'release-speaking'
+        );
 
+    }
+
+
+    if (pttButton) {
 
         pttButton.classList.remove(
             'speaking'
         );
 
+    }
+
+
+    if (currentSpeakerDisplay) {
 
         currentSpeakerDisplay.textContent =
             'SIAP MENDENGARKAN';
@@ -553,95 +662,121 @@ function stopSpeaking() {
 
 
 // ==========================================
-// MOUSE / TOUCH EVENTS
+// PTT - POINTER EVENTS
+// SUPPORT HP + LAPTOP
 // ==========================================
 
-pttButton.addEventListener(
-    'mousedown',
-    (e) => {
+if (pttButton) {
 
-        if (e.button !== 0) {
-            return;
+    pttButton.style.touchAction = 'none';
+
+    pttButton.addEventListener(
+        'pointerdown',
+        async (event) => {
+
+            event.preventDefault();
+
+            try {
+
+                pttButton.setPointerCapture(
+                    event.pointerId
+                );
+
+            } catch (error) {
+                console.warn(
+                    'Pointer capture gagal:',
+                    error
+                );
+            }
+
+
+            await startSpeaking();
+
         }
-
-        startSpeaking();
-
-    }
-);
+    );
 
 
-pttButton.addEventListener(
-    'touchstart',
-    (e) => {
+    pttButton.addEventListener(
+        'pointerup',
+        (event) => {
 
-        e.preventDefault();
+            event.preventDefault();
 
-        startSpeaking();
+            try {
 
-    }
-);
+                pttButton.releasePointerCapture(
+                    event.pointerId
+                );
 
-
-window.addEventListener(
-    'mouseup',
-    () => {
-
-        if (isSpeaking) {
+            } catch (error) {
+                // Ignore
+            }
 
             stopSpeaking();
 
         }
-
-    }
-);
+    );
 
 
-window.addEventListener(
-    'touchend',
-    () => {
-
-        if (isSpeaking) {
+    pttButton.addEventListener(
+        'pointercancel',
+        () => {
 
             stopSpeaking();
 
         }
+    );
 
-    }
-);
+
+    pttButton.addEventListener(
+        'pointerleave',
+        (event) => {
+
+            if (
+                event.pointerType === 'mouse' &&
+                isSpeaking
+            ) {
+
+                stopSpeaking();
+
+            }
+
+        }
+    );
+
+}
 
 
 // ==========================================
-// KEYBOARD SPACEBAR
+// KEYBOARD SPACE
 // ==========================================
 
 window.addEventListener(
     'keydown',
-    (e) => {
+    event => {
 
         if (
-            e.code === 'Space' &&
-            views.app.classList.contains('active')
+            event.code !== 'Space' ||
+            !views.app.classList.contains('active')
         ) {
-
-            if (
-                document.activeElement.tagName ===
-                'INPUT'
-            ) {
-
-                return;
-
-            }
+            return;
+        }
 
 
-            e.preventDefault();
+        if (
+            document.activeElement &&
+            document.activeElement.tagName ===
+            'INPUT'
+        ) {
+            return;
+        }
 
 
-            if (!isSpeaking) {
+        event.preventDefault();
 
-                startSpeaking();
 
-            }
-
+        if (!isSpeaking) {
+            startSpeaking();
         }
 
     }
@@ -650,32 +785,21 @@ window.addEventListener(
 
 window.addEventListener(
     'keyup',
-    (e) => {
+    event => {
 
         if (
-            e.code === 'Space' &&
-            views.app.classList.contains('active')
+            event.code !== 'Space' ||
+            !views.app.classList.contains('active')
         ) {
-
-            if (
-                document.activeElement.tagName ===
-                'INPUT'
-            ) {
-
-                return;
-
-            }
+            return;
+        }
 
 
-            e.preventDefault();
+        event.preventDefault();
 
 
-            if (isSpeaking) {
-
-                stopSpeaking();
-
-            }
-
+        if (isSpeaking) {
+            stopSpeaking();
         }
 
     }
@@ -683,7 +807,7 @@ window.addEventListener(
 
 
 // ==========================================
-// UI METHODS CALLED BY SOCKET.JS
+// CONNECTION STATUS
 // ==========================================
 
 window.updateUIConnectionStatus =
@@ -693,20 +817,24 @@ window.updateUIConnectionStatus =
             `<span class="dot ${colorClass}"></span> ${text}`;
 
 
-        document
-            .getElementById(
+        const connectionStatus =
+            document.getElementById(
                 'connection-status'
-            )
-            .innerHTML =
-            html;
+            );
+
+        if (connectionStatus) {
+            connectionStatus.innerHTML = html;
+        }
 
 
-        document
-            .getElementById(
+        const mobileConnectionStatus =
+            document.getElementById(
                 'mobile-connection-status'
-            )
-            .innerHTML =
-            html;
+            );
+
+        if (mobileConnectionStatus) {
+            mobileConnectionStatus.innerHTML = html;
+        }
 
     };
 
@@ -718,16 +846,19 @@ window.updateUIConnectionStatus =
 window.uiAddUser =
     function (user) {
 
+        if (!user || !user.socketId) {
+            return;
+        }
+
+
         if (
-            usersList.find(
-                u =>
-                    u.socketId ===
+            usersList.some(
+                existing =>
+                    existing.socketId ===
                     user.socketId
             )
         ) {
-
             return;
-
         }
 
 
@@ -737,20 +868,22 @@ window.uiAddUser =
         const li =
             document.createElement('li');
 
-
         li.id =
             `user-${user.socketId}`;
 
 
         li.innerHTML =
-            `<span class="icon">👤</span> ` +
-            `<span class="name">${user.username}</span> ` +
+            `<span class="icon">👤</span>` +
+            `<span class="name">${escapeHtml(user.username || 'User')}</span>` +
             `<span class="status-indicator"></span>`;
 
 
-        document
-            .getElementById('user-list')
-            .appendChild(li);
+        const userList =
+            document.getElementById('user-list');
+
+        if (userList) {
+            userList.appendChild(li);
+        }
 
 
         updateUserCount();
@@ -767,9 +900,8 @@ window.uiRemoveUser =
 
         usersList =
             usersList.filter(
-                u =>
-                    u.socketId !==
-                    socketId
+                user =>
+                    user.socketId !== socketId
             );
 
 
@@ -778,11 +910,8 @@ window.uiRemoveUser =
                 `user-${socketId}`
             );
 
-
         if (li) {
-
             li.remove();
-
         }
 
 
@@ -796,32 +925,44 @@ window.uiRemoveUser =
 // ==========================================
 
 window.uiSetSpeaker =
-    function (
-        socketId,
-        username
-    ) {
+    function (socketId, username) {
+
+        if (
+            socketId &&
+            currentUser &&
+            socketId === currentUser.socketId
+        ) {
+            return;
+        }
+
 
         isChannelBusy = true;
 
 
-        currentSpeakerDisplay.textContent =
-            `${username} SEDANG BERBICARA...`;
+        if (currentSpeakerDisplay) {
+
+            currentSpeakerDisplay.textContent =
+                `${username} SEDANG BERBICARA...`;
+
+            currentSpeakerDisplay.style.color =
+                'var(--color-red)';
+
+        }
 
 
-        currentSpeakerDisplay.style.color =
-            'var(--color-red)';
+        if (pttButton) {
 
+            pttButton.classList.add(
+                'active'
+            );
 
-        pttButton.classList.add(
-            'active'
-        );
+        }
 
 
         const li =
             document.getElementById(
                 `user-${socketId}`
             );
-
 
         if (li) {
 
@@ -830,12 +971,8 @@ window.uiSetSpeaker =
                     '.status-indicator'
                 );
 
-
             if (indicator) {
-
-                indicator.innerHTML =
-                    '🎙️';
-
+                indicator.innerHTML = '🎙️';
             }
 
         }
@@ -855,37 +992,45 @@ window.uiClearSpeaker =
 
         if (!isSpeaking) {
 
-            currentSpeakerDisplay.textContent =
-                'READY';
+            if (currentSpeakerDisplay) {
 
-            currentSpeakerDisplay.style.color =
-                'var(--text-secondary)';
+                currentSpeakerDisplay.textContent =
+                    'READY';
 
-            pttButton.classList.remove(
-                'active'
-            );
+                currentSpeakerDisplay.style.color =
+                    'var(--text-secondary)';
+
+            }
+
+
+            if (pttButton) {
+
+                pttButton.classList.remove(
+                    'active'
+                );
+
+            }
 
         }
 
 
-        const li =
-            document.getElementById(
-                `user-${socketId}`
-            );
+        if (socketId) {
 
-
-        if (li) {
-
-            const indicator =
-                li.querySelector(
-                    '.status-indicator'
+            const li =
+                document.getElementById(
+                    `user-${socketId}`
                 );
 
+            if (li) {
 
-            if (indicator) {
+                const indicator =
+                    li.querySelector(
+                        '.status-indicator'
+                    );
 
-                indicator.innerHTML =
-                    '';
+                if (indicator) {
+                    indicator.innerHTML = '';
+                }
 
             }
 
@@ -895,7 +1040,7 @@ window.uiClearSpeaker =
 
 
 // ==========================================
-// UPDATE USER COUNT
+// USER COUNT
 // ==========================================
 
 function updateUserCount() {
@@ -904,46 +1049,54 @@ function updateUserCount() {
         usersList.length;
 
 
-    document
-        .getElementById(
+    const userCount =
+        document.getElementById(
             'user-count'
-        )
-        .textContent =
-        count;
+        );
+
+    if (userCount) {
+        userCount.textContent = count;
+    }
 
 
-    document
-        .getElementById(
+    const mobileUserCount =
+        document.getElementById(
             'mobile-user-count'
-        )
-        .textContent =
-        count;
+        );
+
+    if (mobileUserCount) {
+        mobileUserCount.textContent =
+            count;
+    }
 
 }
 
 
 // ==========================================
-// NOTIFICATION SYSTEM
+// NOTIFICATION
 // ==========================================
 
-function showNotification(msg) {
+function showNotification(message) {
 
     const container =
         document.getElementById(
             'notification-container'
         );
 
+    if (!container) {
+        console.log(message);
+        return;
+    }
+
 
     const el =
         document.createElement('div');
 
-
     el.className =
         'notification';
 
-
     el.textContent =
-        msg;
+        message;
 
 
     container.appendChild(el);
@@ -962,12 +1115,15 @@ function showNotification(msg) {
 
 
 // ==========================================
-// SHARE CHANNEL
+// SHARE
 // ==========================================
 
-document
-    .getElementById('btn-share')
-    .addEventListener(
+const btnShare =
+    document.getElementById('btn-share');
+
+if (btnShare) {
+
+    btnShare.addEventListener(
         'click',
         async () => {
 
@@ -992,37 +1148,53 @@ document
 
                     });
 
-                } catch (err) {
+                } catch (error) {
 
                     console.log(
-                        'Share error',
-                        err
+                        'Share cancelled:',
+                        error
                     );
 
                 }
 
             } else {
 
-                navigator.clipboard
-                    .writeText(joinUrl);
+                try {
 
-                showNotification(
-                    'Link channel disalin ke clipboard!'
-                );
+                    await navigator.clipboard
+                        .writeText(joinUrl);
+
+                    showNotification(
+                        'Link channel disalin ke clipboard!'
+                    );
+
+                } catch (error) {
+
+                    console.error(
+                        'Clipboard error:',
+                        error
+                    );
+
+                }
 
             }
 
         }
     );
 
+}
+
 
 // ==========================================
 // QR CODE
 // ==========================================
 
-document
-    .getElementById('btn-qr')
-    .addEventListener(
+const btnQr =
+    document.getElementById('btn-qr');
+
+if (btnQr) {
+
+    btnQr.addEventListener(
         'click',
         () => {
 
@@ -1031,63 +1203,57 @@ document
 
 
             const qrContainer =
-                document.getElementById(
-                    'qrcode'
+                document.getElementById('qrcode');
+
+            if (!qrContainer) {
+                return;
+            }
+
+
+            qrContainer.innerHTML = '';
+
+
+            if (typeof QRCode !== 'undefined') {
+
+                new QRCode(
+                    qrContainer,
+                    {
+                        text: joinUrl,
+                        width: 200,
+                        height: 200,
+                        colorDark: '#000000',
+                        colorLight: '#ffffff',
+                        correctLevel:
+                            QRCode.CorrectLevel.H
+                    }
                 );
 
-
-            qrContainer.innerHTML =
-                '';
+            }
 
 
-            new QRCode(
-                qrContainer,
-                {
+            const qrLink =
+                document.getElementById('qr-link');
 
-                    text:
-                        joinUrl,
-
-                    width:
-                        200,
-
-                    height:
-                        200,
-
-                    colorDark:
-                        '#000000',
-
-                    colorLight:
-                        '#ffffff',
-
-                    correctLevel:
-                        QRCode.CorrectLevel.H
-
-                }
-            );
+            if (qrLink) {
+                qrLink.textContent = joinUrl;
+            }
 
 
-            document
-                .getElementById(
-                    'qr-link'
-                )
-                .textContent =
-                joinUrl;
+            const qrModal =
+                document.getElementById('qr-modal');
 
-
-            document
-                .getElementById(
-                    'qr-modal'
-                )
-                .classList.add(
-                    'active'
-                );
+            if (qrModal) {
+                qrModal.classList.add('active');
+            }
 
         }
     );
 
+}
+
 
 // ==========================================
-// SETTINGS
+// SETTINGS / MODE
 // ==========================================
 
 const modeRadios =
@@ -1101,10 +1267,10 @@ modeRadios.forEach(
 
         radio.addEventListener(
             'change',
-            (e) => {
+            event => {
 
                 appMode =
-                    e.target.value;
+                    event.target.value;
 
 
                 if (
@@ -1112,7 +1278,12 @@ modeRadios.forEach(
                     'handsfree'
                 ) {
 
-                    window.unmuteMic();
+                    if (
+                        typeof window.unmuteMic ===
+                        'function'
+                    ) {
+                        window.unmuteMic();
+                    }
 
 
                     if (window.socket) {
@@ -1124,20 +1295,32 @@ modeRadios.forEach(
                     }
 
 
-                    pttButton.style.opacity =
-                        '0.5';
+                    if (pttButton) {
+                        pttButton.style.opacity =
+                            '0.5';
+                    }
 
 
-                    document
-                        .querySelector(
+                    const instruction =
+                        document.querySelector(
                             '.ptt-instruction'
-                        )
-                        .textContent =
-                        'MIC SELALU AKTIF';
+                        );
+
+                    if (instruction) {
+
+                        instruction.textContent =
+                            'MIC SELALU AKTIF';
+
+                    }
 
                 } else {
 
-                    window.muteMic();
+                    if (
+                        typeof window.muteMic ===
+                        'function'
+                    ) {
+                        window.muteMic();
+                    }
 
 
                     if (window.socket) {
@@ -1149,20 +1332,26 @@ modeRadios.forEach(
                     }
 
 
-                    pttButton.style.opacity =
-                        '1';
+                    if (pttButton) {
+                        pttButton.style.opacity =
+                            '1';
+                    }
 
 
-                    document
-                        .querySelector(
+                    const instruction =
+                        document.querySelector(
                             '.ptt-instruction'
-                        )
-                        .innerHTML =
-                        'TEKAN & TAHAN<br>UNTUK BICARA';
+                        );
+
+                    if (instruction) {
+
+                        instruction.innerHTML =
+                            'TEKAN & TAHAN<br>UNTUK BICARA';
+
+                    }
 
 
-                    isSpeaking =
-                        false;
+                    isSpeaking = false;
 
                 }
 
@@ -1174,7 +1363,32 @@ modeRadios.forEach(
 
 
 // ==========================================
-// INITIALIZE APPLICATION
+// HTML ESCAPE
+// ==========================================
+
+function escapeHtml(value) {
+
+    return String(value)
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+
+}
+
+
+// ==========================================
+// INITIALIZE
 // ==========================================
 
 checkUrlRouting();
+
+
+// ==========================================
+// DEBUG
+// ==========================================
+
+console.log(
+    'Walkie Talkie main.js loaded'
+);
