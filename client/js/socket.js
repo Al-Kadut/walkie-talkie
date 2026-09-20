@@ -1,7 +1,7 @@
 // Initialize socket connection
 
 window.socket = io({
-    path: '/api/socket.io',
+    path: '/api',
     autoConnect: false // We will connect manually when joining
 });
 
