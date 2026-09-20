@@ -10,7 +10,7 @@ const app = express();
 const server = http.createServer(app);
 
 const io = new Server(server, {
-    path: '/api/socket.io',
+    path: '/api',
     cors: {
         origin: '*',
         methods: ['GET', 'POST']
