@@ -1,8 +1,32 @@
 {
     "rewrites": [
         {
+            "source": "/js/:path*",
+            "destination": "/client/js/:path*"
+        },
+        {
+            "source": "/css/:path*",
+            "destination": "/client/css/:path*"
+        },
+        {
+            "source": "/assets/:path*",
+            "destination": "/client/assets/:path*"
+        },
+        {
+            "source": "/manifest.json",
+            "destination": "/client/manifest.json"
+        },
+        {
+            "source": "/service-worker.js",
+            "destination": "/client/service-worker.js"
+        },
+        {
             "source": "/join/:path*",
-            "destination": "/"
+            "destination": "/client/index.html"
+        },
+        {
+            "source": "/",
+            "destination": "/client/index.html"
         }
     ]
 }
