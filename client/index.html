@@ -4,181 +4,423 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+
     <title>Walkie Talkie Web</title>
+
     <link rel="manifest" href="/manifest.json">
     <link rel="stylesheet" href="/css/style.css">
 
     <!-- QR Code Library -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer>
+    </script>
+
+    <!-- Socket.IO CDN -->
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" defer>
+    </script>
 </head>
 
 <body>
-    <div id="app">
-        <!-- Notifikasi -->
-        <div id="notification-container"></div>
 
-        <!-- Halaman Landing -->
+    <div id="app">
+
+        <!-- ==========================================
+             LANDING PAGE
+        =========================================== -->
         <section id="landing-page" class="view active">
+
             <div class="container text-center">
+
                 <div class="logo">📻</div>
-                <h1>WALKIE<br>TALKIE</h1>
-                <p class="subtitle">Real-Time Voice Communication</p>
+
+                <h1>
+                    WALKIE<br>
+                    TALKIE
+                </h1>
+
+                <p class="subtitle">
+                    Real-Time Voice Communication
+                </p>
 
                 <div class="actions mt-4">
-                    <button id="btn-goto-join" class="btn btn-primary btn-large">MASUK KE CHANNEL</button>
-                    <button id="btn-create-channel" class="btn btn-secondary mt-2">CREATE CHANNEL</button>
-                </div>
-            </div>
-        </section>
 
-        <!-- Halaman Join -->
-        <section id="join-page" class="view">
-            <div class="container">
-                <div class="header-nav">
-                    <button class="btn-icon" id="btn-back-landing">⬅</button>
-                    <h2>Masuk ke Channel</h2>
-                </div>
-
-                <div class="form-group mt-4">
-                    <label for="channel-input">Kode Channel</label>
-                    <input type="text" id="channel-input" placeholder="Misal: PWR01" autocomplete="off"
-                        style="text-transform: uppercase;">
-                </div>
-
-                <div class="form-group">
-                    <label for="username-input">Nama Anda</label>
-                    <input type="text" id="username-input" placeholder="Misal: Aji" autocomplete="off">
-                </div>
-
-                <!-- Izin Mic -->
-                <div id="mic-permission-box" class="alert mt-2" style="display: none;">
-                    Microphone permission is required to use Walkie Talkie.
-                </div>
-
-                <button id="btn-join-channel" class="btn btn-primary btn-large mt-4">🎙️ GABUNG CHANNEL</button>
-            </div>
-        </section>
-
-        <!-- Halaman Utama Walkie Talkie -->
-        <section id="app-page" class="view layout-app">
-            <!-- Sidebar / Topbar Desktop & Mobile -->
-            <aside class="sidebar">
-                <div class="brand">📻 WALKIE TALKIE</div>
-
-                <div class="channel-info">
-                    <div class="label">CHANNEL</div>
-                    <h2 id="current-channel-display">---</h2>
-                    <div class="status" id="connection-status">
-                        <span class="dot yellow"></span> Connecting...
-                    </div>
-                </div>
-
-                <div class="users-info">
-                    <div class="label">USERS ONLINE (<span id="user-count">0</span>)</div>
-                    <ul id="user-list" class="user-list">
-                        <!-- Daftar User -->
-                    </ul>
-                </div>
-
-                <div class="actions-sidebar">
-                    <button id="btn-share" class="btn btn-outline mb-2">Share Channel</button>
-                    <button id="btn-qr" class="btn btn-outline mb-2">QR Code</button>
-                    <button id="btn-settings" class="btn btn-outline mb-2">⚙ Pengaturan</button>
-                    <button id="btn-leave" class="btn btn-danger">🚪 Keluar</button>
-                </div>
-            </aside>
-
-            <!-- Main Area -->
-            <main class="main-area">
-                <div class="mobile-header">
-                    <div class="mobile-brand">📻</div>
-                    <div class="mobile-channel">
-                        <div id="mobile-channel-display">---</div>
-                        <div class="status" id="mobile-connection-status">
-                            <span class="dot yellow"></span> Connecting
-                        </div>
-                    </div>
-                    <button id="btn-mobile-users" class="btn-icon">👥 <span id="mobile-user-count">0</span></button>
-                </div>
-
-                <div class="ptt-container">
-                    <div id="current-speaker-display" class="speaker-status">READY</div>
-
-                    <button id="ptt-button" class="ptt-button">
-                        <span class="icon">🎙️</span>
+                    <button id="btn-goto-join" class="btn btn-primary btn-large">
+                        MASUK KE CHANNEL
                     </button>
 
-                    <div class="ptt-instruction">
-                        TEKAN & TAHAN<br>UNTUK BICARA
-                    </div>
+                    <button id="btn-create-channel" class="btn btn-secondary mt-2">
+                        CREATE CHANNEL
+                    </button>
+
                 </div>
 
-                <!-- Audio Elements -->
-                <div id="audio-container" style="display: none;"></div>
-            </main>
+            </div>
+
         </section>
 
-        <!-- Modals -->
+
+        <!-- ==========================================
+             JOIN PAGE
+        =========================================== -->
+        <section id="join-page" class="view">
+
+            <div class="container">
+
+                <div class="header-nav">
+
+                    <button class="btn-icon" id="btn-back-landing">
+                        ⬅
+                    </button>
+
+                    <h2>
+                        Masuk ke Channel
+                    </h2>
+
+                </div>
+
+
+                <div class="form-group mt-4">
+
+                    <label for="channel-input">
+                        Kode Channel
+                    </label>
+
+                    <input type="text" id="channel-input" placeholder="Misal: PWR01" autocomplete="off"
+                        style="text-transform: uppercase;">
+
+                </div>
+
+
+                <div class="form-group">
+
+                    <label for="username-input">
+                        Nama Anda
+                    </label>
+
+                    <input type="text" id="username-input" placeholder="Misal: Aji" autocomplete="off">
+
+                </div>
+
+
+                <!-- Mic Permission -->
+                <div id="mic-permission-box" class="alert mt-2" style="display: none;">
+
+                    Microphone permission is required
+                    to use Walkie Talkie.
+
+                </div>
+
+
+                <button id="btn-join-channel" class="btn btn-primary btn-large mt-4">
+
+                    🎙️ GABUNG CHANNEL
+
+                </button>
+
+            </div>
+
+        </section>
+
+
+        <!-- ==========================================
+             MAIN WALKIE TALKIE PAGE
+        =========================================== -->
+        <section id="app-page" class="view layout-app">
+
+
+            <!-- SIDEBAR -->
+            <aside class="sidebar">
+
+                <div class="brand">
+                    📻 WALKIE TALKIE
+                </div>
+
+
+                <div class="channel-info">
+
+                    <div class="label">
+                        CHANNEL
+                    </div>
+
+                    <h2 id="current-channel-display">
+                        ---
+                    </h2>
+
+
+                    <div class="status" id="connection-status">
+
+                        <span class="dot yellow"></span>
+                        Connecting...
+
+                    </div>
+
+                </div>
+
+
+                <div class="users-info">
+
+                    <div class="label">
+
+                        USERS ONLINE
+                        (<span id="user-count">0</span>)
+
+                    </div>
+
+
+                    <ul id="user-list" class="user-list">
+
+                    </ul>
+
+                </div>
+
+
+                <div class="actions-sidebar">
+
+                    <button id="btn-share" class="btn btn-outline mb-2">
+
+                        Share Channel
+
+                    </button>
+
+
+                    <button id="btn-qr" class="btn btn-outline mb-2">
+
+                        QR Code
+
+                    </button>
+
+
+                    <button id="btn-settings" class="btn btn-outline mb-2">
+
+                        ⚙ Pengaturan
+
+                    </button>
+
+
+                    <button id="btn-leave" class="btn btn-danger">
+
+                        🚪 Keluar
+
+                    </button>
+
+                </div>
+
+            </aside>
+
+
+            <!-- MAIN AREA -->
+            <main class="main-area">
+
+
+                <!-- MOBILE HEADER -->
+                <div class="mobile-header">
+
+                    <div class="mobile-brand">
+                        📻
+                    </div>
+
+
+                    <div class="mobile-channel">
+
+                        <div id="mobile-channel-display">
+                            ---
+                        </div>
+
+
+                        <div class="status" id="mobile-connection-status">
+
+                            <span class="dot yellow"></span>
+                            Connecting
+
+                        </div>
+
+                    </div>
+
+
+                    <button id="btn-mobile-users" class="btn-icon">
+
+                        👥
+                        <span id="mobile-user-count">
+                            0
+                        </span>
+
+                    </button>
+
+                </div>
+
+
+                <!-- PUSH TO TALK -->
+                <div class="ptt-container">
+
+                    <div id="current-speaker-display" class="speaker-status">
+
+                        READY
+
+                    </div>
+
+
+                    <button id="ptt-button" class="ptt-button">
+
+                        <span class="icon">
+                            🎙️
+                        </span>
+
+                    </button>
+
+
+                    <div class="ptt-instruction">
+
+                        TEKAN &amp; TAHAN
+                        <br>
+                        UNTUK BICARA
+
+                    </div>
+
+                </div>
+
+
+                <!-- AUDIO -->
+                <div id="audio-container" style="display: none;">
+                </div>
+
+            </main>
+
+        </section>
+
+
+        <!-- ==========================================
+             QR MODAL
+        =========================================== -->
         <div id="qr-modal" class="modal">
+
             <div class="modal-content text-center">
-                <h3>QR Code Channel</h3>
-                <div id="qrcode" class="mt-2 mb-2" style="display: flex; justify-content: center;"></div>
-                <p id="qr-link" class="mb-2"></p>
+
+                <h3>
+                    QR Code Channel
+                </h3>
+
+
+                <div id="qrcode" class="mt-2 mb-2" style="display: flex; justify-content: center;">
+                </div>
+
+
+                <p id="qr-link" class="mb-2">
+                </p>
+
+
                 <button class="btn btn-primary"
                     onclick="document.getElementById('qr-modal').classList.remove('active')">
+
                     Tutup
+
                 </button>
+
             </div>
+
         </div>
 
+
+        <!-- ==========================================
+             SETTINGS MODAL
+        =========================================== -->
         <div id="settings-modal" class="modal">
+
             <div class="modal-content">
-                <h3>Pengaturan</h3>
+
+                <h3>
+                    Pengaturan
+                </h3>
+
 
                 <div class="form-group mt-2">
-                    <label>Mode</label>
+
+                    <label>
+                        Mode
+                    </label>
+
 
                     <div class="toggle-group">
-                        <label>
-                            <input type="radio" name="mode" value="ptt" checked>
-                            Push To Talk
-                        </label>
 
                         <label>
-                            <input type="radio" name="mode" value="handsfree">
-                            Hands Free
+
+                            <input type="radio" name="mode" value="ptt" checked>
+
+                            Push To Talk
+
                         </label>
+
+
+                        <label>
+
+                            <input type="radio" name="mode" value="handsfree">
+
+                            Hands Free
+
+                        </label>
+
                     </div>
+
                 </div>
+
 
                 <button class="btn btn-primary mt-4"
                     onclick="document.getElementById('settings-modal').classList.remove('active')">
+
                     Tutup
+
                 </button>
+
             </div>
+
         </div>
+
     </div>
 
-    <!-- Socket.IO dari CDN -->
-    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+
+    <!-- ==========================================
+         APPLICATION SCRIPTS
+    =========================================== -->
 
     <script src="/js/webrtc.js"></script>
+
     <script src="/js/socket.js"></script>
+
     <script src="/js/main.js"></script>
 
+
+    <!-- ==========================================
+         SERVICE WORKER
+    =========================================== -->
+
     <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/service-worker.js')
-                    .then(registration => {
-                        console.log('ServiceWorker registration successful');
+
+        window.addEventListener('load', () => {
+
+            if ('serviceWorker' in navigator) {
+
+                navigator.serviceWorker
+                    .register('/service-worker.js')
+                    .then(() => {
+
+                        console.log(
+                            'ServiceWorker registration successful'
+                        );
+
                     })
-                    .catch(err => {
-                        console.log('ServiceWorker registration failed: ', err);
+                    .catch((error) => {
+
+                        console.error(
+                            'ServiceWorker registration failed:',
+                            error
+                        );
+
                     });
-            });
-        }
+
+            }
+
+        });
+
     </script>
+
 </body>
 
 </html>
