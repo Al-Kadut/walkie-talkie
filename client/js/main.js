@@ -3,32 +3,62 @@
 // Firebase + WebRTC
 // ==========================================
 
+
+// ==========================================
+// VIEWS
+// ==========================================
+
 const views = {
     landing: document.getElementById('landing-page'),
     join: document.getElementById('join-page'),
     app: document.getElementById('app-page')
 };
 
+
+// ==========================================
+// INPUTS
+// ==========================================
+
 const inputs = {
     channel: document.getElementById('channel-input'),
     username: document.getElementById('username-input')
 };
 
-const pttButton = document.getElementById('ptt-button');
+
+// ==========================================
+// ELEMENTS
+// ==========================================
+
+const pttButton =
+    document.getElementById('ptt-button');
+
 const currentSpeakerDisplay =
     document.getElementById('current-speaker-display');
 
 const micPermissionBox =
     document.getElementById('mic-permission-box');
 
+
+// ==========================================
+// STATE
+// ==========================================
+
 let currentChannelCode = '';
 let currentUser = null;
 
 let appMode = 'ptt';
+
 let isSpeaking = false;
 let isChannelBusy = false;
 
 let usersList = [];
+
+// PTT STATE
+let pttHeld = false;
+
+// ID untuk membatalkan request Firebase
+// yang masih terlambat memberikan response.
+let speakingRequestId = 0;
 
 
 // ==========================================
@@ -45,9 +75,11 @@ function switchView(viewName) {
 
     });
 
+
     if (views[viewName]) {
         views[viewName].classList.add('active');
     }
+
 }
 
 
@@ -72,7 +104,9 @@ function checkUrlRouting() {
 
             switchView('join');
         }
+
     }
+
 }
 
 
@@ -85,11 +119,14 @@ const btnGotoJoin =
 
 if (btnGotoJoin) {
 
-    btnGotoJoin.addEventListener('click', () => {
+    btnGotoJoin.addEventListener(
+        'click',
+        () => {
 
-        switchView('join');
+            switchView('join');
 
-    });
+        }
+    );
 
 }
 
@@ -99,11 +136,14 @@ const btnBackLanding =
 
 if (btnBackLanding) {
 
-    btnBackLanding.addEventListener('click', () => {
+    btnBackLanding.addEventListener(
+        'click',
+        () => {
 
-        switchView('landing');
+            switchView('landing');
 
-    });
+        }
+    );
 
 }
 
@@ -117,32 +157,35 @@ const btnCreateChannel =
 
 if (btnCreateChannel) {
 
-    btnCreateChannel.addEventListener('click', () => {
+    btnCreateChannel.addEventListener(
+        'click',
+        () => {
 
-        const chars =
-            'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+            const chars =
+                'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 
-        let code = '';
+            let code = '';
 
-        for (let i = 0; i < 6; i++) {
+            for (let i = 0; i < 6; i++) {
 
-            code += chars.charAt(
-                Math.floor(
-                    Math.random() * chars.length
-                )
+                code += chars.charAt(
+                    Math.floor(
+                        Math.random() * chars.length
+                    )
+                );
+
+            }
+
+            inputs.channel.value = code;
+
+            switchView('join');
+
+            showNotification(
+                `Channel ${code} dibuat!`
             );
 
         }
-
-        inputs.channel.value = code;
-
-        switchView('join');
-
-        showNotification(
-            `Channel ${code} dibuat!`
-        );
-
-    });
+    );
 
 }
 
@@ -197,8 +240,10 @@ if (btnJoinChannel) {
                 if (!micGranted) {
 
                     if (micPermissionBox) {
+
                         micPermissionBox.style.display =
                             'block';
+
                     }
 
                     btnJoinChannel.disabled = false;
@@ -230,8 +275,10 @@ if (btnJoinChannel) {
 
 
             if (micPermissionBox) {
+
                 micPermissionBox.style.display =
                     'none';
+
             }
 
 
@@ -311,8 +358,10 @@ if (btnJoinChannel) {
                             );
 
                         if (channelDisplay) {
+
                             channelDisplay.textContent =
                                 channel;
+
                         }
 
 
@@ -322,8 +371,10 @@ if (btnJoinChannel) {
                             );
 
                         if (mobileChannelDisplay) {
+
                             mobileChannelDisplay.textContent =
                                 channel;
+
                         }
 
 
@@ -337,7 +388,9 @@ if (btnJoinChannel) {
                             );
 
                         if (userList) {
+
                             userList.innerHTML = '';
+
                         }
 
                         usersList = [];
@@ -349,11 +402,13 @@ if (btnJoinChannel) {
 
                         if (Array.isArray(res.users)) {
 
-                            res.users.forEach(user => {
+                            res.users.forEach(
+                                user => {
 
-                                uiAddUser(user);
+                                    uiAddUser(user);
 
-                            });
+                                }
+                            );
 
                         }
 
@@ -423,9 +478,9 @@ if (btnLeave) {
 
             try {
 
-                if (isSpeaking) {
-                    stopSpeaking();
-                }
+                // Selalu hentikan PTT.
+                stopSpeaking();
+
 
                 if (window.socket) {
 
@@ -445,6 +500,10 @@ if (btnLeave) {
             }
 
 
+            // ==========================================
+            // CLOSE WEBRTC
+            // ==========================================
+
             if (
                 typeof window.closeAllPeerConnections ===
                 'function'
@@ -455,36 +514,56 @@ if (btnLeave) {
             }
 
 
+            // ==========================================
+            // STOP MICROPHONE
+            // ==========================================
+
             if (window.localStream) {
 
                 window.localStream
                     .getTracks()
-                    .forEach(track => {
-                        track.stop();
-                    });
+                    .forEach(
+                        track => {
+                            track.stop();
+                        }
+                    );
 
                 window.localStream = null;
 
             }
 
 
+            // ==========================================
+            // RESET USER LIST
+            // ==========================================
+
             const userList =
-                document.getElementById('user-list');
+                document.getElementById(
+                    'user-list'
+                );
 
             if (userList) {
+
                 userList.innerHTML = '';
+
             }
 
 
             usersList = [];
 
-            currentChannelCode = '';
 
+            // ==========================================
+            // RESET STATE
+            // ==========================================
+
+            currentChannelCode = '';
             currentUser = null;
 
             isChannelBusy = false;
-
             isSpeaking = false;
+
+            pttHeld = false;
+            speakingRequestId++;
 
 
             if (currentSpeakerDisplay) {
@@ -514,6 +593,7 @@ if (btnLeave) {
                 '/'
             );
 
+
             switchView('landing');
 
         }
@@ -523,21 +603,24 @@ if (btnLeave) {
 
 
 // ==========================================
-// PUSH TO TALK
+// START TALKING
 // ==========================================
 
 async function startSpeaking() {
 
-    if (isSpeaking) {
+    // Jangan request berkali-kali.
+    if (isSpeaking || pttHeld) {
         return;
     }
 
 
+    // Handsfree tidak menggunakan PTT.
     if (appMode === 'handsfree') {
         return;
     }
 
 
+    // Pastikan socket tersedia.
     if (!window.socket) {
 
         showNotification(
@@ -549,6 +632,18 @@ async function startSpeaking() {
 
 
     // ==========================================
+    // TOMBOL SEDANG DITEKAN
+    // ==========================================
+
+    pttHeld = true;
+
+
+    // Buat ID request.
+    const requestId =
+        ++speakingRequestId;
+
+
+    // ==========================================
     // REQUEST SPEAKER
     // ==========================================
 
@@ -556,12 +651,78 @@ async function startSpeaking() {
         'request-speaking',
         (res) => {
 
+            // ==========================================
+            // TOMBOL SUDAH DILEPAS?
+            // ==========================================
+
+            if (
+                !pttHeld ||
+                requestId !== speakingRequestId
+            ) {
+
+                // Jangan biarkan Firebase lock
+                // tetap berada pada user ini.
+
+                if (window.socket) {
+
+                    window.socket.emit(
+                        'release-speaking'
+                    );
+
+                }
+
+
+                isSpeaking = false;
+                isChannelBusy = false;
+
+
+                if (
+                    typeof window.muteMic ===
+                    'function'
+                ) {
+
+                    window.muteMic();
+
+                }
+
+
+                if (pttButton) {
+
+                    pttButton.classList.remove(
+                        'speaking'
+                    );
+
+                }
+
+
+                return;
+            }
+
+
+            // ==========================================
+            // BERHASIL MENDAPATKAN CHANNEL
+            // ==========================================
+
             if (res && res.success) {
 
-                isSpeaking = true;
+                // Double check.
+                if (!pttHeld) {
 
+                    window.socket.emit(
+                        'release-speaking'
+                    );
+
+                    return;
+                }
+
+
+                isSpeaking = true;
                 isChannelBusy = true;
 
+
+                // ==========================================
+                // AKTIFKAN MICROPHONE
+                // ==========================================
 
                 if (
                     typeof window.unmuteMic ===
@@ -573,6 +734,10 @@ async function startSpeaking() {
                 }
 
 
+                // ==========================================
+                // BUTTON ACTIVE
+                // ==========================================
+
                 if (pttButton) {
 
                     pttButton.classList.add(
@@ -582,17 +747,52 @@ async function startSpeaking() {
                 }
 
 
+                // ==========================================
+                // STATUS
+                // ==========================================
+
                 if (currentSpeakerDisplay) {
 
                     currentSpeakerDisplay.textContent =
-                        'SEDANG BERBICARA';
+                        'AKU SEDANG BERBICARA...';
 
                     currentSpeakerDisplay.style.color =
                         'var(--color-green)';
 
                 }
 
-            } else {
+            }
+
+
+            // ==========================================
+            // DITOLAK
+            // ==========================================
+
+            else {
+
+                isSpeaking = false;
+                isChannelBusy = false;
+                pttHeld = false;
+
+
+                if (
+                    typeof window.muteMic ===
+                    'function'
+                ) {
+
+                    window.muteMic();
+
+                }
+
+
+                if (pttButton) {
+
+                    pttButton.classList.remove(
+                        'speaking'
+                    );
+
+                }
+
 
                 showNotification(
                     'Channel sedang digunakan orang lain.'
@@ -612,13 +812,28 @@ async function startSpeaking() {
 
 function stopSpeaking() {
 
-    if (!isSpeaking) {
-        return;
-    }
+    // ==========================================
+    // INI HARUS LANGSUNG FALSE
+    // ==========================================
 
+    pttHeld = false;
+
+
+    // Batalkan callback request lama.
+    speakingRequestId++;
+
+
+    // ==========================================
+    // RESET STATUS
+    // ==========================================
 
     isSpeaking = false;
+    isChannelBusy = false;
 
+
+    // ==========================================
+    // MUTE MICROPHONE
+    // ==========================================
 
     if (
         typeof window.muteMic ===
@@ -630,6 +845,10 @@ function stopSpeaking() {
     }
 
 
+    // ==========================================
+    // RELEASE FIREBASE LOCK
+    // ==========================================
+
     if (window.socket) {
 
         window.socket.emit(
@@ -638,6 +857,10 @@ function stopSpeaking() {
 
     }
 
+
+    // ==========================================
+    // RESET BUTTON
+    // ==========================================
 
     if (pttButton) {
 
@@ -648,10 +871,14 @@ function stopSpeaking() {
     }
 
 
+    // ==========================================
+    // RESET STATUS DISPLAY
+    // ==========================================
+
     if (currentSpeakerDisplay) {
 
         currentSpeakerDisplay.textContent =
-            'SIAP MENDENGARKAN';
+            'TEKAN & TAHAN UNTUK BICARA';
 
         currentSpeakerDisplay.style.color =
             'var(--text-secondary)';
@@ -663,18 +890,26 @@ function stopSpeaking() {
 
 // ==========================================
 // PTT - POINTER EVENTS
-// SUPPORT HP + LAPTOP
+// HP + LAPTOP
 // ==========================================
 
 if (pttButton) {
 
-    pttButton.style.touchAction = 'none';
+    // Mencegah gesture bawaan HP.
+    pttButton.style.touchAction =
+        'none';
+
+
+    // ==========================================
+    // POINTER DOWN
+    // ==========================================
 
     pttButton.addEventListener(
         'pointerdown',
         async (event) => {
 
             event.preventDefault();
+
 
             try {
 
@@ -683,24 +918,32 @@ if (pttButton) {
                 );
 
             } catch (error) {
+
                 console.warn(
                     'Pointer capture gagal:',
                     error
                 );
+
             }
 
 
+            // Mulai PTT.
             await startSpeaking();
 
         }
     );
 
 
+    // ==========================================
+    // POINTER UP
+    // ==========================================
+
     pttButton.addEventListener(
         'pointerup',
         (event) => {
 
             event.preventDefault();
+
 
             try {
 
@@ -709,14 +952,21 @@ if (pttButton) {
                 );
 
             } catch (error) {
-                // Ignore
+
+                // Tidak masalah.
             }
 
+
+            // WAJIB STOP.
             stopSpeaking();
 
         }
     );
 
+
+    // ==========================================
+    // POINTER CANCEL
+    // ==========================================
 
     pttButton.addEventListener(
         'pointercancel',
@@ -728,13 +978,17 @@ if (pttButton) {
     );
 
 
+    // ==========================================
+    // MOUSE LEAVE
+    // ==========================================
+
     pttButton.addEventListener(
         'pointerleave',
         (event) => {
 
             if (
                 event.pointerType === 'mouse' &&
-                isSpeaking
+                pttHeld
             ) {
 
                 stopSpeaking();
@@ -759,25 +1013,45 @@ window.addEventListener(
             event.code !== 'Space' ||
             !views.app.classList.contains('active')
         ) {
+
             return;
+
         }
 
 
+        // Jangan aktif ketika mengetik.
         if (
             document.activeElement &&
-            document.activeElement.tagName ===
-            'INPUT'
+            (
+                document.activeElement.tagName ===
+                'INPUT' ||
+                document.activeElement.tagName ===
+                'TEXTAREA'
+            )
         ) {
+
             return;
+
+        }
+
+
+        // Hindari keydown berulang.
+        if (
+            event.repeat ||
+            pttHeld
+        ) {
+
+            event.preventDefault();
+
+            return;
+
         }
 
 
         event.preventDefault();
 
 
-        if (!isSpeaking) {
-            startSpeaking();
-        }
+        startSpeaking();
 
     }
 );
@@ -791,15 +1065,63 @@ window.addEventListener(
             event.code !== 'Space' ||
             !views.app.classList.contains('active')
         ) {
+
             return;
+
         }
 
 
         event.preventDefault();
 
 
-        if (isSpeaking) {
+        // Selalu stop.
+        stopSpeaking();
+
+    }
+);
+
+
+// ==========================================
+// SAFETY RELEASE
+// ==========================================
+
+// Kalau browser kehilangan fokus,
+// PTT otomatis dihentikan.
+
+window.addEventListener(
+    'blur',
+    () => {
+
+        if (
+            pttHeld ||
+            isSpeaking
+        ) {
+
             stopSpeaking();
+
+        }
+
+    }
+);
+
+
+// Kalau tab disembunyikan,
+// PTT otomatis dihentikan.
+
+document.addEventListener(
+    'visibilitychange',
+    () => {
+
+        if (
+            document.hidden &&
+            (
+                pttHeld ||
+                isSpeaking
+            )
+        ) {
+
+            stopSpeaking();
+
         }
 
     }
@@ -823,7 +1145,10 @@ window.updateUIConnectionStatus =
             );
 
         if (connectionStatus) {
-            connectionStatus.innerHTML = html;
+
+            connectionStatus.innerHTML =
+                html;
+
         }
 
 
@@ -833,7 +1158,10 @@ window.updateUIConnectionStatus =
             );
 
         if (mobileConnectionStatus) {
-            mobileConnectionStatus.innerHTML = html;
+
+            mobileConnectionStatus.innerHTML =
+                html;
+
         }
 
     };
@@ -846,11 +1174,17 @@ window.updateUIConnectionStatus =
 window.uiAddUser =
     function (user) {
 
-        if (!user || !user.socketId) {
+        if (
+            !user ||
+            !user.socketId
+        ) {
+
             return;
+
         }
 
 
+        // Jangan duplicate.
         if (
             usersList.some(
                 existing =>
@@ -858,7 +1192,9 @@ window.uiAddUser =
                     user.socketId
             )
         ) {
+
             return;
+
         }
 
 
@@ -874,15 +1210,21 @@ window.uiAddUser =
 
         li.innerHTML =
             `<span class="icon">👤</span>` +
-            `<span class="name">${escapeHtml(user.username || 'User')}</span>` +
+            `<span class="name">${escapeHtml(
+                user.username || 'User'
+            )}</span>` +
             `<span class="status-indicator"></span>`;
 
 
         const userList =
-            document.getElementById('user-list');
+            document.getElementById(
+                'user-list'
+            );
 
         if (userList) {
+
             userList.appendChild(li);
+
         }
 
 
@@ -901,7 +1243,8 @@ window.uiRemoveUser =
         usersList =
             usersList.filter(
                 user =>
-                    user.socketId !== socketId
+                    user.socketId !==
+                    socketId
             );
 
 
@@ -911,7 +1254,9 @@ window.uiRemoveUser =
             );
 
         if (li) {
+
             li.remove();
+
         }
 
 
@@ -927,12 +1272,18 @@ window.uiRemoveUser =
 window.uiSetSpeaker =
     function (socketId, username) {
 
+        // Jangan tampilkan user sendiri
+        // sebagai speaker orang lain.
+
         if (
             socketId &&
             currentUser &&
-            socketId === currentUser.socketId
+            socketId ===
+            currentUser.socketId
         ) {
+
             return;
+
         }
 
 
@@ -972,7 +1323,10 @@ window.uiSetSpeaker =
                 );
 
             if (indicator) {
-                indicator.innerHTML = '🎙️';
+
+                indicator.innerHTML =
+                    '🎙️';
+
             }
 
         }
@@ -1029,7 +1383,9 @@ window.uiClearSpeaker =
                     );
 
                 if (indicator) {
+
                     indicator.innerHTML = '';
+
                 }
 
             }
@@ -1055,7 +1411,10 @@ function updateUserCount() {
         );
 
     if (userCount) {
-        userCount.textContent = count;
+
+        userCount.textContent =
+            count;
+
     }
 
 
@@ -1065,8 +1424,10 @@ function updateUserCount() {
         );
 
     if (mobileUserCount) {
+
         mobileUserCount.textContent =
             count;
+
     }
 
 }
@@ -1084,8 +1445,11 @@ function showNotification(message) {
         );
 
     if (!container) {
+
         console.log(message);
+
         return;
+
     }
 
 
@@ -1203,7 +1567,9 @@ if (btnQr) {
 
 
             const qrContainer =
-                document.getElementById('qrcode');
+                document.getElementById(
+                    'qrcode'
+                );
 
             if (!qrContainer) {
                 return;
@@ -1213,7 +1579,10 @@ if (btnQr) {
             qrContainer.innerHTML = '';
 
 
-            if (typeof QRCode !== 'undefined') {
+            if (
+                typeof QRCode !==
+                'undefined'
+            ) {
 
                 new QRCode(
                     qrContainer,
@@ -1232,18 +1601,29 @@ if (btnQr) {
 
 
             const qrLink =
-                document.getElementById('qr-link');
+                document.getElementById(
+                    'qr-link'
+                );
 
             if (qrLink) {
-                qrLink.textContent = joinUrl;
+
+                qrLink.textContent =
+                    joinUrl;
+
             }
 
 
             const qrModal =
-                document.getElementById('qr-modal');
+                document.getElementById(
+                    'qr-modal'
+                );
 
             if (qrModal) {
-                qrModal.classList.add('active');
+
+                qrModal.classList.add(
+                    'active'
+                );
+
             }
 
         }
@@ -1273,16 +1653,29 @@ modeRadios.forEach(
                     event.target.value;
 
 
+                // ==========================================
+                // HANDSFREE
+                // ==========================================
+
                 if (
                     appMode ===
                     'handsfree'
                 ) {
 
+                    // Batalkan PTT.
+                    pttHeld = false;
+                    speakingRequestId++;
+
+                    isSpeaking = false;
+
+
                     if (
                         typeof window.unmuteMic ===
                         'function'
                     ) {
+
                         window.unmuteMic();
+
                     }
 
 
@@ -1296,8 +1689,10 @@ modeRadios.forEach(
 
 
                     if (pttButton) {
+
                         pttButton.style.opacity =
                             '0.5';
+
                     }
 
 
@@ -1313,13 +1708,30 @@ modeRadios.forEach(
 
                     }
 
-                } else {
+                }
+
+
+                // ==========================================
+                // PTT
+                // ==========================================
+
+                else {
+
+                    // Pastikan handsfree dilepas.
+                    pttHeld = false;
+                    speakingRequestId++;
+
+                    isSpeaking = false;
+                    isChannelBusy = false;
+
 
                     if (
                         typeof window.muteMic ===
                         'function'
                     ) {
+
                         window.muteMic();
+
                     }
 
 
@@ -1333,8 +1745,15 @@ modeRadios.forEach(
 
 
                     if (pttButton) {
+
                         pttButton.style.opacity =
                             '1';
+
+                        pttButton.classList.remove(
+                            'speaking',
+                            'active'
+                        );
+
                     }
 
 
@@ -1351,7 +1770,15 @@ modeRadios.forEach(
                     }
 
 
-                    isSpeaking = false;
+                    if (currentSpeakerDisplay) {
+
+                        currentSpeakerDisplay.textContent =
+                            'TEKAN & TAHAN UNTUK BICARA';
+
+                        currentSpeakerDisplay.style.color =
+                            'var(--text-secondary)';
+
+                    }
 
                 }
 
@@ -1369,11 +1796,26 @@ modeRadios.forEach(
 function escapeHtml(value) {
 
     return String(value)
-        .replaceAll('&', '&amp;')
-        .replaceAll('<', '&lt;')
-        .replaceAll('>', '&gt;')
-        .replaceAll('"', '&quot;')
-        .replaceAll("'", '&#039;');
+        .replaceAll(
+            '&',
+            '&amp;'
+        )
+        .replaceAll(
+            '<',
+            '&lt;'
+        )
+        .replaceAll(
+            '>',
+            '&gt;'
+        )
+        .replaceAll(
+            '"',
+            '&quot;'
+        )
+        .replaceAll(
+            "'",
+            '&#039;'
+        );
 
 }
 
